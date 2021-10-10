@@ -53,7 +53,7 @@ class CConfig
 
     public:
         std::vector<LPCConfItem> m_ConfigItemList;  // 存储配置信息的列表
-
+        // 注意这里这个容器存的是指针类型
 };
 
 #endif
