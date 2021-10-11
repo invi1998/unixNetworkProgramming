@@ -32,7 +32,7 @@ u_char *ngx_slprintf(u_char *buf, u_char *last, const char *fmt, ...)
 // 对于nginx自定义的数据结构进行标准化格式输出
 // 例如：给进来一个 “abc = %d",13  最终buf里应该得到的是 abc=13 这种结果
 // 
-// buf: 往这里放数据
+// buf: 往这里放数据（往这里写数据 写打印 也就是写日志）
 // last：放的数据不要超过这里
 // fmt: 以这个为首的一系列可变参数
 // 支持的格式：%d[%xd/%Xd]： 数字，     %s:字符串       %f:浮点数       %p: pid_t
@@ -100,12 +100,12 @@ u_char *ngx_vslprintf(u_char *buf, u_char *last,const char *fmt, va_list args)
                     continue;   // 回到for继续判断    
 
                 case 'X':       // %X 这个X表示十六进制，并且十六进制A-F为大写，不要单独使用，一般都是 %Xd
-                    hes = 2;    // 标记以大写字母显示十六进制中的A-F
+                    hex = 2;    // 标记以大写字母显示十六进制中的A-F
                     fmt++;      // 往后走一个字符
                     continue;   // 回到for继续判断 
 
                 case 'x':       // %x 这个x表示十六进制，并且十六进制a-f为小写，不要单独使用，一般都是 %xd
-                    hes = 2;    // 标记小写字母显示十六进制中的a-f
+                    hex = 2;    // 标记小写字母显示十六进制中的a-f
                     fmt++;      // 往后走一个字符
                     continue;   // 回到for继续判断 
 
@@ -291,7 +291,7 @@ static u_char * ngx_sprintf_num(u_char *buf, u_char *last, uint64_t ui64, u_char
     }
     else if (hexadecimal == 1)  //如果显示一个十六进制数字，格式符为：%xd，则这个条件成立，要以16进制数字形式显示出来这个十进制数,a-f小写
     {
-        //比如我显示一个1,234,567【十进制数】，他对应的二进制数实际是 12 D687 ，那怎么显示出这个12D687来呢？
+        //比如我显示一个1,234,567【十进制数】，他对应的十六进制数实际是 12 D687 ，那怎么显示出这个12D687来呢？
         do 
         {            
             //0xf就是二进制的1111,大家都学习过位运算，ui64 & 0xf，就等于把 一个数的最末尾的4个二进制位拿出来；

@@ -53,6 +53,7 @@ ngx_log_t ngx_log;
 // ngx_log_stderr(15, "invalid option: %s , %d", "testInfo",326);        //nginx: invalid option: testInfo , 326
 // ngx_log_stderr(0, "invalid option: %d", 1678); 
 
+// 往屏幕上打印一条错误信息
 void ngx_log_stderr(int err, const char *fmt, ...)
 {
     va_list args;
@@ -66,13 +67,24 @@ void ngx_log_stderr(int err, const char *fmt, ...)
 
     last = errstr + NGX_MAX_ERROR_STR;
     // last指向的是整个buffer最后，【指向最后一个有效位置的后面也就是非有效位】，作为一个标记，
+    // 其实就是标记，只要你字符串长度不要超出这个last，那就说明是安全的，没有越界
     // 防止输出内容超出这么长
     // 这里认为是有问题的，所以才在上面 u_char errstr[NGX_MAX_ERROR_STR+1]; 给了加1
     // 比如你定义了char tmp[2]，你如果last = tmp+2，那么last实际上指向了tmp[2]，而tmp[2]在使用中是无效的
 
     p = ngx_cpymem(errstr,"nginx: ", 7);    // p指向“nginx: ”之后
+    // 这里为什么是指向“nginx: ”之后，注意去看 ngx_cpymem 的定义
 
-    va_start(args,fmt); // 使用args指向起始的参数
+    //    va_start(ap,fmt);//将第一个可变参数的地址付给ap，即ap指向可变参数列表的开始
+    //     //ch = va_arg( ap, char *);//取出ap里面的值，即第一个可变参数，char *根据实际传入的参数类型改变，调用va_arg后ap自增；
+    //     //ch1 = va_arg( ap, char);//取出ap里面的值，即第二个可变参数，char需根据可变参数具体类型改变，调用va_arg后ap自增；
+    //     //i = va_arg( ap, int );//取出ap里面的值，即第三个可变参数，int需根据可变参数具体类型改变，调用va_arg后ap自增；
+    //     vsprintf(string,fmt,ap);//将参数fmt、ap指向的可变参数一起转换成格式化字符串，放string数组中，具体自行百度vsprintf相关功能
+    //     va_end(ap); //ap付值为0，没什么实际用处，主要是为程序健壮性
+    //     //putchar(ch); //打印取出来的字符
+    //     printf(string); //把格式化字符串打印出来
+
+    va_start(args,fmt); // 使用args指向起始的参数（可变参数就这么用）
     p = ngx_vslprintf(p, last,fmt, args);   // 组合出这个字符串保存在errstr中
     va_end(args);   // 释放args
 
@@ -94,7 +106,7 @@ void ngx_log_stderr(int err, const char *fmt, ...)
     *p++ = '\n';    // 增加换行符
 
     // 往标准错误【一般是屏幕】输出信息
-    write(STDERR_FILEND, errstr, p-errstr);
+    write(STDERR_FILENO, errstr, p-errstr);
     
 
     // 测试代码
@@ -120,7 +132,7 @@ u_char *ngx_log_errno(u_char *buf, u_char *last, int err)
     // 这里插入一些字符串：（%d）
     char leftstr[10] = {0};
     sprintf(leftstr," (%d: ", err);
-    size_t leftlen = strlen(rightstr);
+    size_t leftlen = strlen(leftstr);
 
     char rightstr[] = ") ";
     size_t rightlen = strlen(rightstr);
