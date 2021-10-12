@@ -4,25 +4,50 @@
 #include <string.h>
 
 #include "ngx_c_conf.h"     // 和配置文件处理相关的类，名字带C_表示和类有关
-#include "ngx_func.h"   // 头文件路径，已经使用gcc -I 参数指定了 各种函数声明
+#include "ngx_func.h"       // 头文件路径，已经使用gcc -I 参数指定了 各种函数声明
 #include "ngx_signal.h"
 
+// 本文件用的函数声明
+static void freeresource();
+
 // 和设置标题有关的全局量
-char **g_os_argv;   // 原始命令行参数数组，在main中会被赋值
-char *gp_envmem = NULL; // 指向自己分配的env环境变量的内存
-int g_environlen = 0;   // 环境变量所占内存的大小
+size_t g_argvneddmem=0;             // 保存下这些argv参数所需的内存大小
+size_t g_envneedmem=0;              // 保存环境变量所需的内存大小
+int g_os_argc;                      // 参数个数
+char **g_os_argv;                   // 原始命令行参数数组，在main中会被赋值
+char *gp_envmem = NULL;             // 指向自己分配的env环境变量的内存，在ngx_init_setproctitile()函数中会被分配内存
 
 //和进程本身有关的全局量
-pid_t ngx_pid;               //当前进程的pid
+pid_t ngx_pid;                  //当前进程的pid
+pid_t ngx_parent;               // 父进程的pid
 
 
 int main(int argc, char *const *argv)
 {   
     int exitcode = 0;           //退出代码，先给0表示正常退出
+    int i = 0;                  // 临时使用
 
     //(1)无伤大雅也不需要释放的放最上边    
     ngx_pid = getpid();         //取得进程pid
+    ngx_parent = getppid();     // 取得父进程id
     g_os_argv = (char **) argv; //保存参数指针    
+
+    // 统计argv所占用的内存
+    g_argvneddmem = 0;
+
+    for (i = 0; i < argc; i++)  // argv = ./nginx -a -b -c asgsd
+    {
+        g_argvneddmem += strlen(argv[i]) + 1;   // +1是留给 \0 的空间
+    }
+    
+    // 统计环境变量所占的内存。注意判断方法是environ[i]是否作为环境变量结束标记
+    for(i = 0; environ[i]; i++)
+    {
+        g_envneedmem += strlen(environ[i]) + 1; // +1实际上是因为末尾有\0，是占据实际内存位置的，要算进来
+    }
+
+    g_os_argc = argc;           // 保存参数个数
+    g_os_argv = (char **) argv; // 保存参数指针
 
     //(2)初始化失败，就要直接退出的
     //配置文件必须最先要，后边初始化啥的都用，所以先把配置读出来，供后续使用 
@@ -41,6 +66,9 @@ int main(int argc, char *const *argv)
 
     //(4)一些不好归类的其他类别的代码，准备放这里
     ngx_init_setproctitle();    //把环境变量搬家
+
+    //(5)开始正式工作流程，主流程一直在下面这个函数里面循环，暂时不会走下去，资源释放这些后续完善
+    ngx_master_process_cycle();
 
     
     //--------------------------------------------------------------    

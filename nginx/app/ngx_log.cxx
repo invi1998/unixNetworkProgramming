@@ -282,7 +282,7 @@ void ngx_log_init()
 
     // 只写打开|追加到末尾|文件不存在则创建文件 【这3个参数指定文件访问权限】
     // mode = 0644:文件访问权限， 6:110， 4:100， 【用户：读写，   用户所在组：读，   其他：读】
-    ngx_log.fd = open((const char *)plogname, O_WRONLY|O_AOOEND|O_CREAT, 0644);
+    ngx_log.fd = open((const char *)plogname, O_WRONLY|O_APPEND|O_CREAT, 0644);
     if(ngx_log.fd==-1)  // 如果有错误，则直接定位到 标准错误上去
     {
         ngx_log_stderr(errno, "[alert] could not open error log file: open() \"%s\" failed", plogname);
