@@ -76,12 +76,12 @@ void ngx_log_stderr(int err, const char *fmt, ...)
     // 这里为什么是指向“nginx: ”之后，注意去看 ngx_cpymem 的定义
 
     //    va_start(ap,fmt);//将第一个可变参数的地址付给ap，即ap指向可变参数列表的开始
-    //     //ch = va_arg( ap, char *);//取出ap里面的值，即第一个可变参数，char *根据实际传入的参数类型改变，调用va_arg后ap自增；
-    //     //ch1 = va_arg( ap, char);//取出ap里面的值，即第二个可变参数，char需根据可变参数具体类型改变，调用va_arg后ap自增；
-    //     //i = va_arg( ap, int );//取出ap里面的值，即第三个可变参数，int需根据可变参数具体类型改变，调用va_arg后ap自增；
+        //ch = va_arg( ap, char *);//取出ap里面的值，即第一个可变参数，char *根据实际传入的参数类型改变，调用va_arg后ap自增；
+        //ch1 = va_arg( ap, char);//取出ap里面的值，即第二个可变参数，char需根据可变参数具体类型改变，调用va_arg后ap自增；
+        //i = va_arg( ap, int );//取出ap里面的值，即第三个可变参数，int需根据可变参数具体类型改变，调用va_arg后ap自增；
     //     vsprintf(string,fmt,ap);//将参数fmt、ap指向的可变参数一起转换成格式化字符串，放string数组中，具体自行百度vsprintf相关功能
     //     va_end(ap); //ap付值为0，没什么实际用处，主要是为程序健壮性
-    //     //putchar(ch); //打印取出来的字符
+        //putchar(ch); //打印取出来的字符
     //     printf(string); //把格式化字符串打印出来
 
     va_start(args,fmt); // 使用args指向起始的参数（可变参数就这么用）
@@ -107,6 +107,14 @@ void ngx_log_stderr(int err, const char *fmt, ...)
 
     // 往标准错误【一般是屏幕】输出信息
     write(STDERR_FILENO, errstr, p-errstr);
+
+    // 往标准错误中写的内容，为了防止看不到，会同时打印一份相同的信息到日志文件中
+    //如果这是个有效的日志文件，本条件肯定成立，此时也才有意义将这个信息写到日志文件
+    if (ngx_log.fd > STDERR_FILENO)
+    {
+        ngx_log_error_core(NGX_LOG_STDERR,err,(const char *)errstr);
+        //这里有个\n，ngx_log_error_core还有个\n，所以写到日志会有一个空行多出来
+    }
     
 
     // 测试代码

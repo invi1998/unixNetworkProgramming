@@ -85,7 +85,10 @@ void ngx_master_process_cycle()
         {
             strcat(title, g_os_argv[i]);
         }
-        ngx_setproctitle(title);
+        ngx_setproctitle(title);    // 设置标题
+
+        ngx_log_error_core(NGX_LOG_NOTICE,0,"%s %P 启动并开始运行......!",title,ngx_pid);
+        //设置标题时顺便记录下来进程名，进程id等信息到日志
     }
     // 首先先设置主进程的标题 -------------------end
 
@@ -175,6 +178,9 @@ static void ngx_worker_process_cycle(int inum, const char *pprocname)
     ngx_worker_process_init(inum);
     // 重新为子进程设置进程名，不要与父进程重复-------------------------
     ngx_setproctitle(pprocname);        // 设置标题
+
+    ngx_log_error_core(NGX_LOG_NOTICE,0,"%s %P 启动并开始运行......!",pprocname,ngx_pid);
+    //设置标题时顺便记录下来进程名，进程id等信息到日志
 
     // 暂时先放个死循环
     // setvbuf(stdout, NULL, _IONBF, 0);    // 这个函数，直接将printf缓冲区禁止了，printf就直接输出了

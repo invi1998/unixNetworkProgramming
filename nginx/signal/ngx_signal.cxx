@@ -22,6 +22,7 @@ typedef struct
 
 // 声明一个信号处理函数(函数指针)
 static void ngx_signal_handler(int signo, siginfo_t *siginfo, void *ucontext);  // static表示该函数只在当前文件内可见
+static void ngx_process_get_status(void);                                       // 获取子进程的结束状态，防止单独kill子进程时子进程变成僵尸进程
 
 
 // 数组。定义本系统中处理的各种信号，我们取一小部分nginx中的信号，并没有全部搬移到这里，日后若有需要可以根据情况增加
@@ -48,7 +49,7 @@ int ngx_init_signals()
     ngx_signal_t        *sig;       // 指向自定义的结构数组的指针
     struct sigaction    sa;         // sigaction: 系统定义的跟信号有关的一个结构，后续调用系统的sigaction()函数都用这个同名的结构
 
-    for (sig = signals; sig->signo != 0; sig++)
+    for (sig = signals; sig->signo != 0; sig++) // 将signo == 0 作为一个标记，因为信号的编号都不为0（从1开始）
     {
         // 注意这里：现在要把一堆信息往 变量 sa 对应的结构里弄
         memset(&sa, 0, sizeof(struct sigaction));
@@ -98,7 +99,133 @@ int ngx_init_signals()
 //信号处理函数
 static void ngx_signal_handler(int signo, siginfo_t *siginfo, void *ucontext)
 {
-    printf("来信号了\n");
+    // printf("来信号了\n");
+    ngx_signal_t *sig;      // 自定义结构
+    char *action;           // 一个字符串，用于记录一个动作字符串以便于往的日志文件中写
+
+    for (sig = signals; sig->signo != 0; sig++)     // 遍历信号数组
+    {
+        // 找到对应的信号，即可处理
+        if (sig->signo == signo)
+        {
+            break;
+        }
+    }
+
+    action = (char*) "";    // 目前暂时没有动作
+
+    if(ngx_process == NGX_PROCESS_MASTER)       // master进程。管理进程，处理的信号一帮会比较多
+    {
+        // master进程往这里走
+        switch (signo)
+        {
+        case SINGCHLD:      // 一般子进程退出会收到该信号
+            ngx_reap = 1;       // 标记子进程状态变化 ， 日后master主进程的for(;;)循环中可能会用到这个变量【比如重新产生一个子进程】
+            /* code */
+            break;
+
+        // ***********其他信号处理程序以后再加
+        
+        default:
+            break;
+        }
+    }
+    else if (ngx_process == NGX_PROCESS_WORKER) // worker子进程，具体处理业务逻辑的，处理的信号相对较少
+    {
+        // worker进程
+    }
+    else
+    {
+        //非master非worker进程，先啥也不干
+        //do nothing
+    }
+
+    // 记录一些日志信息
+    // siginfo
+    if (siginfo && siginfo->si_pid)     // si_pid = sending process ID【发送该信号的进程ID】
+    {
+        ngx_log_error_core(NGX_LOG_NOTICE, 0, "signal %d (%s) received from %P%s", signo, sig->signame, siginfo->si_pid, action);
+    }
+    else
+    {
+        ngx_log_error_core(NGX_LOG_NOTICE, 0, "signal %d (%s) received %s", signo, sig->signame, action);   // 没有发送该信号的进程ID，所以不会显示发送该信号的进程Id
+    }
+
+
+    // 待扩展
+
+    // 子进程状态有变化，通常是意外退出【官方是在这里进行处理】
+    if(signo == SIGCHLD)
+    {
+        ngx_process_get_status();   // 获取子进程的结束状态
+    }
+
+    return;
+
+}
+
+
+// 获取子进程的结束状态，防止单独kill子进程时子进程变成僵尸进程
+static void ngx_process_get_status(void)
+{
+    pid_t           pid;
+    int             status;
+    int             err;
+    int             one = 0;    // 原自官方nginx，应该是标记信号正常处理过一次
+
+
+    // 当你杀死一个子进程时，父进程会收到这个SIGCHLD信号
+    for(;;)
+    {
+        // waitpid, 有人也用 wait。
+        // waitpid说白了就是获取子进程的终止状态，这样子进程就不会成为僵尸进程了
+        // 第一次waitpid返回一个 大于 0 的值，表示成功，后面显示 2019/01/14 21:43:38 [alert] 3375: pid = 3377 exited on signal 9【SIGKILL】
+        // 第二次再循环回来，再次调用waitpid会返回一个 0 ，表示子进程还没有结束，然后这里有return来进行退出
+        pid = waitpid(-1, &status, WHOHANG);   
+        // 第一个参数为 -1 ，表示等待任何子进程
+        // 第二个参数： 保存子进程的状态信息
+        // 第三个参数： 提供额外的选项，WHOHANG表示不要阻塞，让这个waitpid()立即返回
+
+        if (pid == 0)   // 子进程还没结束，会立即返回这个数字，但是这里应该不是这个数字【因为一般是子进程退出时会执行到这个函数】
+        {
+            return;
+        }
+        if(pid == -1)   // 这里表示这个waitpid调用有错误，有错误就返回出去
+        {
+            // 这里处理代码源自官方nginx，主要是打印一些日志。
+            err = errno;
+            if (err == EINTR)   // 调用被某个信号中断
+            {
+                continue;
+            }
+
+            if (err == ECHILD)  // 没有子进程
+            {
+                ngx_log_error_core(NGX_LOG_INFO, err, "waitpid() failed!");
+                return;
+            }
+
+            ngx_log_error_core(NGX_LOG_ALERT,err,"waitpid() failed!");
+            return;
+        }
+
+        // 走到这里表示 成功【返回进程ID】，这里根据官方写法，打印一些日志来记录子进程的退出
+        one = 1;        // 标记waitpid()返回了正常的返回值
+        if(WTERMSIG(status))    // 获取使得子进程终止的信号编号
+        {
+            ngx_log_error_core(NGX_LOG_ALERT, 0, "pid = %P exited on signal %d!",pid,WTERMSIG(status));
+            //获取使子进程终止的信号编号
+        }
+        else 
+        {
+            ngx_log_error_core(NGX_LOG_NOTICE,0,"pid = %P exited with code %d!",pid,WEXITSTATUS(status));
+            //WEXITSTATUS()获取子进程传递给exit或者_exit参数的低八位
+        }
+
+    }
+
+    return;
+
 }
 
 
