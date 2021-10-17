@@ -79,9 +79,9 @@ bool CConfig::Load(const char *pconfName)
             // 其实就是 int *p = new int;
             memset(p_confitem,0,sizeof(CConfItem));
             // 将p_confitem指向的内存全部设置为0
-            strncpy(p_confitem->ItemName,linebuf,(int)(ptmp->linebuf));
+            strncpy(p_confitem->ItemName,linebuf,(int)(ptmp-linebuf));
             // 等号左侧的拷贝到p_confitem->ItemName (也就是配置项左边的名字)
-            strncpy(p_confitem->ItemContent,ptmp+1);
+            strcpy(p_confitem->ItemContent,ptmp + 1);
             // 等号右侧的拷贝到p_confitem->ItemContent (也就是配置项右边的值)
 
             // 下面这个是将配置项前后的空格都去掉

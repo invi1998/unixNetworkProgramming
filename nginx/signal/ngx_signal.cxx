@@ -5,9 +5,11 @@
 #include <stdlib.h>
 #include <signal.h>    //信号相关头文件 
 #include <errno.h>     //errno
+#include <sys/wait.h> // waitpid
 
 #include "ngx_macro.h"
 #include "ngx_func.h" 
+#include "ngx_global.h"
 
 // 定义一个和信号处理有关的结构体   ngx_signal_t
 typedef struct
@@ -89,7 +91,7 @@ int ngx_init_signals()
         else
         {
             // ngx_log_error_core(NGX_LOG_EMERG,errno,"sigaction(%s) succed!",sig->signame);     //成功不用写日志 
-            ngx_log_stderr(0, "sigaction(%s) success!", sig->signame);  // 直接往屏幕上打印，不需要时间可以去掉
+            // ngx_log_stderr(0, "sigaction(%s) success!", sig->signame);  // 直接往屏幕上打印，不需要时间可以去掉
         }
     }
     return 0;
@@ -97,6 +99,7 @@ int ngx_init_signals()
 }
 
 //信号处理函数
+//siginfo：这个系统定义的结构中包含了信号产生原因的有关信息
 static void ngx_signal_handler(int signo, siginfo_t *siginfo, void *ucontext)
 {
     // printf("来信号了\n");
@@ -119,7 +122,7 @@ static void ngx_signal_handler(int signo, siginfo_t *siginfo, void *ucontext)
         // master进程往这里走
         switch (signo)
         {
-        case SINGCHLD:      // 一般子进程退出会收到该信号
+        case SIGCHLD:      // 一般子进程退出会收到该信号
             ngx_reap = 1;       // 标记子进程状态变化 ， 日后master主进程的for(;;)循环中可能会用到这个变量【比如重新产生一个子进程】
             /* code */
             break;
@@ -181,7 +184,7 @@ static void ngx_process_get_status(void)
         // waitpid说白了就是获取子进程的终止状态，这样子进程就不会成为僵尸进程了
         // 第一次waitpid返回一个 大于 0 的值，表示成功，后面显示 2019/01/14 21:43:38 [alert] 3375: pid = 3377 exited on signal 9【SIGKILL】
         // 第二次再循环回来，再次调用waitpid会返回一个 0 ，表示子进程还没有结束，然后这里有return来进行退出
-        pid = waitpid(-1, &status, WHOHANG);   
+        pid = waitpid(-1, &status, WNOHANG);   
         // 第一个参数为 -1 ，表示等待任何子进程
         // 第二个参数： 保存子进程的状态信息
         // 第三个参数： 提供额外的选项，WHOHANG表示不要阻塞，让这个waitpid()立即返回
@@ -197,6 +200,11 @@ static void ngx_process_get_status(void)
             if (err == EINTR)   // 调用被某个信号中断
             {
                 continue;
+            }
+
+            if(err == ECHILD  && one)  //没有子进程
+            {
+                return;
             }
 
             if (err == ECHILD)  // 没有子进程

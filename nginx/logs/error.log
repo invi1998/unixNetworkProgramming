@@ -1,0 +1,18 @@
+2021/10/17 07:08:44 [notice] 14280: master process ./nginx 14280 启动并开始运行......!
+2021/10/17 07:08:44 [notice] 14281: worker process 14281 启动并开始运行......!
+2021/10/17 07:08:44 [notice] 14283: worker process 14283 启动并开始运行......!
+2021/10/17 07:08:44 [notice] 14282: worker process 14282 启动并开始运行......!
+2021/10/17 07:08:44 [notice] 14284: worker process 14284 启动并开始运行......!
+2021/10/17 07:11:30 [notice] 14445: master process ./nginx 14445 启动并开始运行......!
+2021/10/17 07:11:30 [notice] 14446: worker process 14446 启动并开始运行......!
+2021/10/17 07:11:30 [notice] 14447: worker process 14447 启动并开始运行......!
+2021/10/17 07:11:30 [notice] 14449: worker process 14449 启动并开始运行......!
+2021/10/17 07:11:30 [notice] 14448: worker process 14448 启动并开始运行......!
+2021/10/17 03:22:01 [notice] 15071: master process ./nginx 15071 启动并开始运行......!
+2021/10/17 03:22:01 [notice] 15072: worker process 15072 启动并开始运行......!
+2021/10/17 03:22:01 [notice] 15074: worker process 15074 启动并开始运行......!
+2021/10/17 03:22:01 [notice] 15073: worker process 15073 启动并开始运行......!
+2021/10/17 03:22:01 [notice] 15075: worker process 15075 启动并开始运行......!
+2021/10/17 03:22:27 [notice] 15073: signal 1 (SIGHUP) received from 5742
+2021/10/17 03:23:11 [notice] 15071: signal 17 (SIGCHLD) received from 15075
+2021/10/17 03:23:11 [alert] 15071: pid = 15075 exited on signal 9!

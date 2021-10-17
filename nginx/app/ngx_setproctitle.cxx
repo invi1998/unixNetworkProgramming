@@ -8,23 +8,16 @@
 // 设置可执行程序标题相关函数：分配内存，并且把环境变量拷贝到新内存中来
 void ngx_init_setproctitle()
 {
-    int i;
-    // 统计环境变量所占的内存。注意判断方法是environ[i]是否为空作为环境变量结束标记
-    for(i = 0; environ[i]; i++)
-    {
-        g_environlen += strlen(environ[i]) + 1;
-        // + 1 是因为末尾有\0，是占实际内存位置的，要算进来
-    }
 
     // 这里无需判断 penvmen == NULL,有些编译器new会返回NULL，有些会爆异常，但是不管怎么样，
     // 如果在重要的地方new失败了，你无法收场，让程序崩溃，帮助你发现问题为好
-    gp_envmem = new char[g_environlen];
-    memset(gp_envmem, 0, g_encironlen);     // 内存要清空防止出现问题
+    gp_envmem = new char[g_envneedmem];
+    memset(gp_envmem, 0, g_envneedmem);     // 内存要清空防止出现问题
 
     char *ptmp = gp_envmem;
 
     // 把原来的内存内容般到新地方
-    for(i = 0; environ[i]; i++)
+    for(int i = 0; environ[i]; i++)
     {
         size_t size = strlen(environ[i])+1;
         // 不要落下+1；否者内存全乱套了。因为strlen是不包括字符串末尾符\0的
@@ -37,7 +30,7 @@ void ngx_init_setproctitle()
 }
 
 // 设置可执行程序标题
-void ngx_setproctitile(const char * title)
+void ngx_setproctitle(const char * title)
 {
 
     // 这里我们假设，所有的命令行 参数我们都不要了，可以被随意覆盖；
@@ -46,14 +39,14 @@ void ngx_setproctitile(const char * title)
     // 1）计算新标题的长度
     size_t ititlelen = strlen(title);
 
-    // 2）计算总的原始的argv的那块内存的总长度【包括各种参数】
-    size_t e_environlen = 0;    // e 表示全局变量
-    for(int i = 0; g_os_argv[i]; i++)
-    {
-        e_environlen += strlen(g_os_argv[i])+1;
-    }
+    // size_t e_environlen = 0;    // e 表示全局变量
+    // for(int i = 0; g_os_argv[i]; i++)
+    // {
+    //     e_environlen += strlen(g_os_argv[i])+1;
+    // }
 
-    size_t esy = e_environlen + g_environlen;   // argv和environ内存总和
+    // 2）计算总的原始的argv的那块内存的总长度【包括各种参数】
+    size_t esy = g_argvneedmem + g_envneedmem;   // argv和environ内存总和
 
     if(esy <= ititlelen)
     {

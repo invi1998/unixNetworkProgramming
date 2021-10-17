@@ -29,7 +29,7 @@
 // 这是什么意思，这里就是指明，现在 ngx_cpymem 返回的不再是目标存储区的指针，而是目标存储区（可写的目标字符串的）末尾
 // 这样就使得，使用这个函数去拷贝字符串，就可以实现每次写入都在字符串末尾写入
 // 注意#define的写法，n这里用()包裹防止出现什么错误
-#define ngx_min(val1, val2)     ((val1 > val2) ? (val1) : (val2))
+#define ngx_min(val1, val2)     ((val1 > val2) ? (val2) : (val1))
 // 比较大小，返回小值，注意使用()包裹
 
 
@@ -53,7 +53,7 @@
 #define NGX_LOG_INFO              7    //信息 【info】
 #define NGX_LOG_DEBUG             8    //调试 【debug】：最低级别
 
-#define NGX_ERROR_LOG_PATH       "logs/error1.log"   //定义日志存放的路径和文件名 
+#define NGX_ERROR_LOG_PATH       "logs/error.log"   //定义日志存放的路径和文件名 
 
 //进程相关----------------------
 //标记当前进程类型

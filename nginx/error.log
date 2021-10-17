@@ -1,0 +1,124 @@
+2021/10/17 06:26:22 [stderr] 12397: nginx: sigaction(SIGHUP) success!
+
+2021/10/17 06:26:22 [stderr] 12397: nginx: sigaction(SIGINT) success!
+
+2021/10/17 06:26:22 [stderr] 12397: nginx: sigaction(SIGTERM) success!
+
+2021/10/17 06:26:22 [stderr] 12397: nginx: sigaction(SIGCHLD) success!
+
+2021/10/17 06:26:22 [stderr] 12397: nginx: sigaction(SIGQUIT) success!
+
+2021/10/17 06:26:22 [stderr] 12397: nginx: sigaction(SIGIO) success!
+
+2021/10/17 06:26:22 [stderr] 12397: nginx: sigaction(SIGSYS, SIG_IGN) success!
+
+2021/10/17 06:26:22 [notice] 12397: master process ./nginx 12397 启动并开始运行......!
+2021/10/17 06:26:22 [notice] 12398: worker process 12398 启动并开始运行......!
+2021/10/17 06:26:22 [notice] 12399: worker process 12399 启动并开始运行......!
+2021/10/17 06:26:22 [notice] 12400: worker process 12400 启动并开始运行......!
+2021/10/17 06:26:22 [notice] 12401: worker process 12401 启动并开始运行......!
+2021/10/17 06:26:57 [notice] 12399: signal 2 (SIGINT) received 
+2021/10/17 06:26:57 [notice] 12401: signal 2 (SIGINT) received 
+2021/10/17 06:26:57 [notice] 12398: signal 2 (SIGINT) received 
+2021/10/17 06:26:57 [notice] 12400: signal 2 (SIGINT) received 
+2021/10/17 06:26:57 [notice] 12397: signal 2 (SIGINT) received 
+2021/10/17 06:26:59 [notice] 12401: signal 2 (SIGINT) received 
+2021/10/17 06:26:59 [notice] 12398: signal 2 (SIGINT) received 
+2021/10/17 06:26:59 [notice] 12400: signal 2 (SIGINT) received 
+2021/10/17 06:26:59 [notice] 12399: signal 2 (SIGINT) received 
+2021/10/17 06:26:59 [notice] 12397: signal 2 (SIGINT) received 
+2021/10/17 06:26:59 [notice] 12401: signal 2 (SIGINT) received 
+2021/10/17 06:26:59 [notice] 12399: signal 2 (SIGINT) received 
+2021/10/17 06:26:59 [notice] 12398: signal 2 (SIGINT) received 
+2021/10/17 06:26:59 [notice] 12400: signal 2 (SIGINT) received 
+2021/10/17 06:27:00 [notice] 12397: signal 2 (SIGINT) received 
+2021/10/17 06:37:19 [notice] 12758: master process ./nginx 12758 启动并开始运行......!
+2021/10/17 06:37:19 [notice] 12759: worker process 12759 启动并开始运行......!
+2021/10/17 06:37:19 [notice] 12760: worker process 12760 启动并开始运行......!
+2021/10/17 06:37:19 [notice] 12761: worker process 12761 启动并开始运行......!
+2021/10/17 06:37:19 [notice] 12762: worker process 12762 启动并开始运行......!
+2021/10/17 06:37:41 [notice] 12762: signal 2 (SIGINT) received 
+2021/10/17 06:37:41 [notice] 12759: signal 2 (SIGINT) received 
+2021/10/17 06:37:41 [notice] 12761: signal 2 (SIGINT) received 
+2021/10/17 06:37:41 [notice] 12758: signal 2 (SIGINT) received 
+2021/10/17 06:37:41 [notice] 12760: signal 2 (SIGINT) received 
+2021/10/17 06:37:41 [notice] 12761: signal 2 (SIGINT) received 
+2021/10/17 06:37:41 [notice] 12759: signal 2 (SIGINT) received 
+2021/10/17 06:37:41 [notice] 12762: signal 2 (SIGINT) received 
+2021/10/17 06:37:41 [notice] 12760: signal 2 (SIGINT) received 
+2021/10/17 06:37:42 [notice] 12758: signal 2 (SIGINT) received 
+2021/10/17 06:47:51 [stderr] 13178: nginx: sigaction(SIGHUP) success!
+
+2021/10/17 06:47:51 [stderr] 13178: nginx: sigaction(SIGINT) success!
+
+2021/10/17 06:47:51 [stderr] 13178: nginx: sigaction(SIGTERM) success!
+
+2021/10/17 06:47:51 [stderr] 13178: nginx: sigaction(SIGCHLD) success!
+
+2021/10/17 06:47:51 [stderr] 13178: nginx: sigaction(SIGQUIT) success!
+
+2021/10/17 06:47:51 [stderr] 13178: nginx: sigaction(SIGIO) success!
+
+2021/10/17 06:47:51 [stderr] 13178: nginx: sigaction(SIGSYS, SIG_IGN) success!
+
+2021/10/17 06:47:51 [notice] 13178: master process ./nginx 13178 启动并开始运行......!
+2021/10/17 06:47:51 [notice] 13179: worker process 13179 启动并开始运行......!
+2021/10/17 06:47:51 [notice] 13180: worker process 13180 启动并开始运行......!
+2021/10/17 06:47:51 [notice] 13181: worker process 13181 启动并开始运行......!
+2021/10/17 06:47:51 [notice] 13182: worker process 13182 启动并开始运行......!
+2021/10/17 06:48:32 [notice] 13182: signal 2 (SIGINT) received 
+2021/10/17 06:48:32 [notice] 13179: signal 2 (SIGINT) received 
+2021/10/17 06:48:32 [notice] 13178: signal 2 (SIGINT) received 
+2021/10/17 06:48:32 [notice] 13181: signal 2 (SIGINT) received 
+2021/10/17 06:48:32 [notice] 13180: signal 2 (SIGINT) received 
+2021/10/17 06:48:34 [notice] 13182: signal 2 (SIGINT) received 
+2021/10/17 06:48:34 [notice] 13179: signal 2 (SIGINT) received 
+2021/10/17 06:48:34 [notice] 13181: signal 2 (SIGINT) received 
+2021/10/17 06:48:34 [notice] 13180: signal 2 (SIGINT) received 
+2021/10/17 06:48:34 [notice] 13178: signal 2 (SIGINT) received 
+2021/10/17 06:49:51 [notice] 13323: master process ./nginx 13323 启动并开始运行......!
+2021/10/17 06:49:51 [notice] 13324: worker process 13324 启动并开始运行......!
+2021/10/17 06:49:51 [notice] 13325: worker process 13325 启动并开始运行......!
+2021/10/17 06:49:51 [notice] 13326: worker process 13326 启动并开始运行......!
+2021/10/17 06:49:51 [notice] 13327: worker process 13327 启动并开始运行......!
+2021/10/17 06:58:25 [notice] 13640: master process ./nginx 13640 启动并开始运行......!
+2021/10/17 06:58:25 [notice] 13641: worker process 13641 启动并开始运行......!
+2021/10/17 06:58:25 [notice] 13642: worker process 13642 启动并开始运行......!
+2021/10/17 06:58:25 [notice] 13643: worker process 13643 启动并开始运行......!
+2021/10/17 06:58:25 [notice] 13644: worker process 13644 启动并开始运行......!
+2021/10/17 06:59:57 [notice] 13640: signal 2 (SIGINT) received 
+2021/10/17 06:59:57 [notice] 13644: signal 2 (SIGINT) received 
+2021/10/17 06:59:57 [notice] 13641: signal 2 (SIGINT) received 
+2021/10/17 06:59:57 [notice] 13642: signal 2 (SIGINT) received 
+2021/10/17 06:59:57 [notice] 13643: signal 2 (SIGINT) received 
+2021/10/17 06:59:58 [notice] 13641: signal 2 (SIGINT) received 
+2021/10/17 06:59:58 [notice] 13643: signal 2 (SIGINT) received 
+2021/10/17 06:59:58 [notice] 13644: signal 2 (SIGINT) received 
+2021/10/17 06:59:58 [notice] 13642: signal 2 (SIGINT) received 
+2021/10/17 06:59:58 [notice] 13640: signal 2 (SIGINT) received 
+2021/10/17 07:00:29 [notice] 13788: master process ./nginx 13788 启动并开始运行......!
+2021/10/17 07:00:29 [notice] 13789: worker process 13789 启动并开始运行......!
+2021/10/17 07:00:29 [notice] 13790: worker process 13790 启动并开始运行......!
+2021/10/17 07:00:29 [notice] 13791: worker process 13791 启动并开始运行......!
+2021/10/17 07:00:29 [notice] 13792: worker process 13792 启动并开始运行......!
+2021/10/17 07:04:22 [stderr] 13977: nginx: 1
+
+2021/10/17 07:04:22 [stderr] 13977: nginx: 2
+
+2021/10/17 07:04:22 [stderr] 13977: nginx: 3
+
+2021/10/17 07:04:22 [notice] 13977: master process ./nginx 13977 启动并开始运行......!
+2021/10/17 07:04:22 [notice] 13978: worker process 13978 启动并开始运行......!
+2021/10/17 07:04:22 [notice] 13979: worker process 13979 启动并开始运行......!
+2021/10/17 07:04:22 [notice] 13980: worker process 13980 启动并开始运行......!
+2021/10/17 07:04:22 [notice] 13981: worker process 13981 启动并开始运行......!
+2021/10/17 07:06:24 [notice] 14124: master process ./nginx 14124 启动并开始运行......!
+2021/10/17 07:06:24 [notice] 14125: worker process 14125 启动并开始运行......!
+2021/10/17 07:06:24 [notice] 14126: worker process 14126 启动并开始运行......!
+2021/10/17 07:06:24 [notice] 14127: worker process 14127 启动并开始运行......!
+2021/10/17 07:06:24 [notice] 14128: worker process 14128 启动并开始运行......!
+2021/10/17 03:20:25 [notice] 14934: master process ./nginx 14934 启动并开始运行......!
+2021/10/17 03:20:25 [notice] 14935: worker process 14935 启动并开始运行......!
+2021/10/17 03:20:25 [notice] 14938: worker process 14938 启动并开始运行......!
+2021/10/17 03:20:25 [notice] 14936: worker process 14936 启动并开始运行......!
+2021/10/17 03:20:25 [notice] 14937: worker process 14937 启动并开始运行......!
