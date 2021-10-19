@@ -23,6 +23,9 @@ char    **g_os_argv;            //原始命令行参数数组,在main中会被�
 char    *gp_envmem=NULL;        //指向自己分配的env环境变量的内存，在ngx_init_setproctitle()函数中会被分配内存
 int     g_daemonized=0;         //守护进程标记，标记是否启用了守护进程模式，0：未启用，1：启用了
 
+// socket相关
+CSocket g_socket;               // socket全局对象
+
 //和进程本身有关的全局量
 pid_t   ngx_pid;                //当前进程的pid
 pid_t   ngx_parent;             //父进程的pid
@@ -80,7 +83,12 @@ int main(int argc, char *const *argv)
     {
         exitcode = 1;
         goto lblexit;
-    }    
+    }
+    if(g_socket.Initialize() == false)
+    {
+        exitcode = 1;
+        goto lblexit;
+    }
 
     //(5)一些不好归类的其他类别的代码，准备放这里
     ngx_init_setproctitle();    //把环境变量搬家

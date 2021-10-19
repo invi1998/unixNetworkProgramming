@@ -123,8 +123,53 @@ bool CSocket::ngx_open_listening_sockets()
         }
 
         // 放到列表里
-        lpngx_listening_t p_listensocketitem = new ngx_listening_t;      // 注意不要写错，前面类型是指针类型，后面的类型是一个结构体
-        memset(p_listensocketitem, 0, sizeof(ngx_listening_t));          // 这里后面用的是 ngx_listening_t 而不是lpngx_listening_t
+        lpngx_listening_t p_listensocketitem = new ngx_listening_t;         // 注意不要写错，前面类型是指针类型，后面的类型是一个结构体
+        memset(p_listensocketitem, 0, sizeof(ngx_listening_t));             // 这里后面用的是 ngx_listening_t 而不是lpngx_listening_t
+        p_listensocketitem->port = iport;                                   // 记录所监听的端口号
+        p_listensocketitem->fd = isock;                                     // 保存套接字句柄
+        ngx_log_error_core(NGX_LOG_INFO, 0, "监听%d端口成功！", iport);      // 打印日志
+        m_ListenSocketList.push_back(p_listensocketitem);                   // 加入到队列中
     }
+    return true;
 
+}
+
+// 设置socket连接为非阻塞模式【这种函数写法很固定】。非阻塞：【不断调用，不断调用这种，在拷贝数据的时候是阻塞的】
+bool CSocket::setnonblocking(int sockfd)
+{
+    int nb = 1;     // 0:清除   1：设置
+    if (ioctl(sockfd, FIONBIO, &nb) == -1)
+    {
+        return false;
+    }
+    return true;
+
+    // 如下也是一种写法，跟上面这种写法其实是一样的，只是上面这个写法更简单
+    // fcntl:file control 【文件控制】相关函数，执行各种描述符控制操作
+    // 参数1：所要设置的秒数符，这里是套接字【也是描述符的一种】
+    // int opts = fcntl(sockfd, F_GETFL);  // 用F_GETL先获取描述符的一些标志信息
+    // if(opts < 0)
+    // {
+    //     ngx_log_stderr(errno,"CSocekt::setnonblocking()中fcntl(F_GETFL)失败.");
+    //     return false;
+    // }
+    // opts |= O_NONBLOCK; // 把非阻塞标记加到原来的标记上，标记这是一个非租塞套接字，【如何关闭非阻塞呢？opts &= ~O_NONBLOCK;然后再F_SETFL 一下即可】
+    // if(fcntl(sockfd, F_SETFL, opts) < 0)
+    // {
+    //     ngx_log_stderr(errno,"CSocekt::setnonblocking()中fcntl(F_SETFL)失败.");
+    //     return false;
+    // }
+    // return true;
+    
+}
+
+// 关闭socket，什么时候用，这里暂时不确定，先把这个函数预备在这里
+void CSocket::ngx_close_listening_sockts()
+{
+    for(int i = 0; i < m_ListenPortCount; i++)  // 要关闭这些个监听端口
+    {
+        close(m_ListenSocketList[i]->fd);
+        ngx_log_error_core(NGX_LOG_INFO,0,"关闭监听端口%d!",m_ListenSocketList[i]->port); //显示一些信息到日志中
+    }
+    return;
 }
