@@ -73,11 +73,113 @@ void CSocket::ngx_event_accept(lpngx_connection_t oldc)
 
                 level = NGX_LOG_ERR;
             }
-            
+
+            // EMFILE: 进程的fd已经用尽【已达到系统所允许单一进程所能打开的文件/套接字总数】。
+            // 使用命令 ulimit -n  ： 查看文件描述符显示，如果是1024的话，需要改大：打开的文件句柄数过多，把系统的fd软限制和硬限制都抬高
+            // ENFILE：这个errno的存在，表明一定存在system-wide的resource limits，而不仅仅有process-specific的resouce limits。按照常识，
+            // process-soecific的resource limits一定受限于system-wide的resource limits
+            else if (err == EMFILE || err == ENFILE)
+            {
+                level = NGX_LOG_CRIT;
+            }
+
+            ngx_log_error_core(level, errno, "CSocket::ngx_event_accept()中accept4()失败!");
+
+            if (use_accept4 && err == ENOSYS)   // accept4()函数没实现
+            {
+                use_accept4 = 0;                // 标记不使用accept4()函数，改用accept()函数
+                continue;
+            }
+
+            if (err == ECONNABORTED)            // 对方关闭套接字
+            {
+                // 这个错误因为可以忽略，所以不用干啥
+
+            }
+
+            if (err == EMFILE || err == ENFILE)
+            {
+                // do nothing 官方nginx的做法是，先把读事件从listen socket中移除，然后再弄一个定时器，定时器到了则继续执行该函数，但是定时器到了有个标记，会把读事件增加到listen socket上去
+                // 这里先暂时不处理，因为上面即写这个日志了
+            }
+            return;
             
         }
-        
 
+        // 走到这里，表示accept4()成功了
+        // ngx_log_stderr(errno, "accept4成功s=%d", s);    // s这里就是一个句柄了
+        newc = ngx_get_connection(s);
+        if (newc == NULL)
+        {
+            // 连接池中的连接不够用，那么就得把这个socket直接关闭并返回了，因为ngx_get_connection()中已经写日志了，所以这里不再需要写日志了
+            if (close(s) == -1)
+            {
+                ngx_log_error_core(NGX_LOG_ALERT, errno, "CSocket::ngx_event_accept()中close(%d)失败！", s);
+            }
+            return;
+            
+        }
+
+        // ---------------将来这里会判断是否连接超过最大允许连接数，现在先暂时不处理
+
+        // 成功拿到连接池中一个连接
+        memset(&newc->s_sockaddr, &mysockaddr, socklen);    // 拷贝客户端地址到连接对象【要转成字符串IP地址，参考函数ngx_sock_ntop()】
+
+        // {
+        //     // 测试将收到的地址弄成字符串，格式形如“192.168.1.126"或者""192.168.1.126:40904"
+        //     u_char ipaddr[100];
+        //     memset(ipaddr,0, sizeof(ipaddr));
+        //     ngx_sock_ntop(&newc->s_sockaddr, 1, ipaddr, sizeof(ipaddr)-10); // 宽度给小点
+        //     ngx_log_stderr(0, "ip信息为%s\n", ipaddr);
+        // }
+        
+        if(!use_accept4)
+        {
+            // 如果不是用accept4()取得的socket，那么就要设置为非阻塞【因为使用accept4()的已经被accept4()设置为非阻塞了】
+            if (setnonblocking(s) == false)
+            {
+                // 设置非阻塞失败
+                ngx_close_accepted_connection(newc);
+                return;     // 直接返回
+            }
+            
+        }
+
+        newc->listening = oldc->listening;                      // 连接对象，和监听对象关联，方便通过连接对象找监听对象【关联到监听端口】
+        newc->w_ready = 1;                                      // 标记可以写，新连接写事件肯定是ready的，【从连接池拿出一个连接时这个连接的所有成员都是0】
+        newc->rhandler = &CSocket::ngx_wait_request_handler;    // 设置数据来的时候的读处理函数。其实官方nginx中是ngx_http_wait_request_handler()
+
+        // 客户端应该主动发送第一次的数据，这里读事件加入epoll监控
+        // s,                   socket句柄
+        // 1, 0,                读， 写
+        // EPOLLET,             其他补充标记【EPOLLET（高速模式，边缘触发ET）】
+        // EPOLL_CTL_ADD,       事件类型【增加，还有删除/修改】
+        // newc                 连接池中的连接
+        if (ngx_epoll_add_event(s, 1, 0, EPOLLET, EPOLL_CTL_ADD, newc) == -1)
+        {
+            // 增加事件失败。失败日志在ngx_epoll_add_event中写过了
+            ngx_close_accepted_connection(newc);
+            return; // 直接返回
+        }
+
+        break;      // 一般就是循环一次就跳出去
+    
     } while (1);
+    
+    return;
+
+}
+
+// 用户连入，我们accept4()时，得到的socket在处理中产生失败，则资源用这个函数进行释放【因为这里涉及到好几个要释放的资源，所以写成函数】
+void CSocket::ngx_close_accepted_connection(lpngx_connection_t c)
+{
+    int fd = c->fd;
+    ngx_free_connection(c);
+    c->fd = -1;
+    if (close(fd) == -1)
+    {
+        ngx_log_error_core(NGX_LOG_ALERT, errno, "CSocekt::ngx_close_accepted_connection()中close(%d)失败!",fd);
+    }
+    return;
     
 }
