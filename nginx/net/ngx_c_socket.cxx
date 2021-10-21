@@ -247,6 +247,7 @@ int CSocket::ngx_epoll_init()
     lpngx_connection_t next = NULL;
     lpngx_connection_t c = m_pconnections;  // 连接池数组的首地址
 
+    // 这个do while循环就是在初始化连接池，并将连接池数组元素通过next指针绑定到一起，形成链表
     do
     {
         i--;                    // 注意i是数字末尾，从最后遍历，i递减至数组的首个元素
@@ -262,6 +263,7 @@ int CSocket::ngx_epoll_init()
         next = &c[i];           // next指针向前移
 
     } while (i);    // 循环直到 i 为 0 .即循环到数组首地址
+    // 注意这里：当这个循环执行完毕后，next的指向现在是指向这个链表的表头
 
     m_pfree_connections = next;         // 设置空闲连接链表头指针，因为现在next指向c[0]，注意现在整个链表都是空的
     m_free_connection_n = m_connection_n;   // 空闲连接链表的长度，因为现在整个链表都是空的，所以这两个参数相等

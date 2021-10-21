@@ -213,7 +213,11 @@ static void ngx_worker_process_init(int inum)
     {
         ngx_log_error_core(NGX_LOG_ALERT,errno,"ngx_worker_process_init()中sigprocmask()失败!");
     }
-    
+
+    //如下这些代码参照官方nginx里的ngx_event_process_init()函数中的代码
+    g_socket.ngx_epoll_init();           //初始化epoll相关内容，同时 往监听socket上增加监听事件，从而开始让监听端口履行其职责
+    //g_socket.ngx_epoll_listenportstart();//往监听socket上增加监听事件，从而开始让监听端口履行其职责【如果不加这行，虽然端口能连上，但不会触发ngx_epoll_process_events()里边的epoll_wait()往下走】
+    // 这里监听端口的职责是什么，职责就是，当有客户端通过3次握手连接的时候，来通知
     
     //....将来再扩充代码
     //....

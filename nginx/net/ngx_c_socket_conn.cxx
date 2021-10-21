@@ -23,7 +23,7 @@
 // 从连接池中获取一个空闲连接，【当一个客户端tcp连接进入，我希望把这个连接和我连接池中的一个连接【对象】绑到一起，后续可以通过这个连接，把这个对象找到，因为对象里可以记录各种信息】
 lpngx_connection_t CSocket::ngx_get_connection(int isock)
 {
-    lpngx_connection_t c = m_pfree_connections; // 空闲连接表头
+    lpngx_connection_t c = m_pfree_connections; // 空闲连接链表头
 
     if (c == NULL)
     {
