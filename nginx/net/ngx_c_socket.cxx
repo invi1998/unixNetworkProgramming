@@ -481,7 +481,7 @@ int CSocket::ngx_epoll_process_events(int timer)
 
             //ngx_log_stderr(errno,"2222222222222222222222222.");
         }
-        if(revents & EPOLLIN)
+        if(revents & EPOLLIN)   // 如果是读事件
         {
             // 一个客户端新连入，这个就会成立
             // c->r_ready = 1;              // 标记可读。【从连接池中拿出一个连接时，这个连接的所有成员都是0】
