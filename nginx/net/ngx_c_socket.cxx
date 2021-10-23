@@ -126,6 +126,8 @@ bool CSocket::ngx_open_listening_sockets()
         // 参数2：是表示级别，和参数3配套使用，也就是说，参数3如果确定了，参数2就确定了
         // 参数3：允许重复用本地地址
         // 设置 SO_REUSEADDR。解决TIME_WAIT这个状态导致bind()失败的问题
+        // 允许一个布尔型选项（参数3），则将参数4指向非零整形数；禁止一个选项参数4指向一个等于零的整形数。对于布尔型选项，参数5应等于sizeof(int)；
+        // 对其他选项，参数4指向包含所需选项的整形数或结构，而参数5则为整形数或结构的长度。
         int reuseaddr = 1;  // 1:打开对应的设置项
         if(setsockopt(isock, SOL_SOCKET, SO_REUSEADDR, (const void *) &reuseaddr, sizeof(reuseaddr)) == -1)
         {
@@ -144,11 +146,17 @@ bool CSocket::ngx_open_listening_sockets()
 
         // 设置本服务器要监听的地址和端口，这样客户端才能连接到该地址和端口并发送数据
         strinfo[0] = 0;
+        // C 库函数 int sprintf(char *str, const char *format, ...) 发送格式化输出到 str 所指向的字符串。
         sprintf(strinfo, "ListenPort%d", i);
         iport = p_config->GetIntDefault(strinfo, 10000);
         serv_addr.sin_port = htons((in_port_t)iport);   // in_port_t其实就是uint16_t
 
         // 绑定服务器地址结构体
+        /* 
+        * __fd:socket描述字，也就是socket引用
+        * myaddr:要绑定给sockfd的协议地址
+        * __len:地址的长度
+        */
         if(bind(isock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1)
         {
             ngx_log_stderr(errno, "CSocekt::Initialize()中bind()失败,i=%d.",i);
@@ -488,6 +496,8 @@ int CSocket::ngx_epoll_process_events(int timer)
             (this->*(c->rhandler))(c);      // 注意括号的运用，来正确的设置优先级，防止编译出错；如果是个新客户连入
                                             // 如果新连接进入，这里执行的应该是CSocket::ngx_event_accept(c)
                                             // 如果是已经连入，发送数据到这里，则这里执行的应该是CSocket::ngx_wait_request_handler
+            // 为什么可以这样掉用呢？看该函数指针定义方法（他是一个成员函数指针）
+            // typedef void (CSocket::*ngx_event_handler_pt)(lpngx_connection_t c);    // 定义成员函数指针
         }
 
         if(revents & EPOLLOUT) // 如果是写事件
