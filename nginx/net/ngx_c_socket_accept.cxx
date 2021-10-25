@@ -155,7 +155,8 @@ void CSocket::ngx_event_accept(lpngx_connection_t oldc)
         // EPOLLET,             其他补充标记【EPOLLET（高速模式，边缘触发ET）】
         // EPOLL_CTL_ADD,       事件类型【增加，还有删除/修改】
         // newc                 连接池中的连接
-        if (ngx_epoll_add_event(s, 1, 0, EPOLLET, EPOLL_CTL_ADD, newc) == -1)
+        // if (ngx_epoll_add_event(s, 1, 0, EPOLLET, EPOLL_CTL_ADD, newc) == -1)    // ET
+        if (ngx_epoll_add_event(s, 1, 0, 0, EPOLL_CTL_ADD, newc) == -1) // LT 本项目使用LT模式
         {
             // 增加事件失败。失败日志在ngx_epoll_add_event中写过了
             ngx_close_accepted_connection(newc);
