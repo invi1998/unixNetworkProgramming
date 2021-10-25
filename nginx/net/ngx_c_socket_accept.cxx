@@ -139,7 +139,7 @@ void CSocket::ngx_event_accept(lpngx_connection_t oldc)
             if (setnonblocking(s) == false)
             {
                 // 设置非阻塞失败
-                ngx_close_accepted_connection(newc);
+                ngx_close_connection(newc);
                 return;     // 直接返回
             }
             
@@ -159,7 +159,7 @@ void CSocket::ngx_event_accept(lpngx_connection_t oldc)
         if (ngx_epoll_add_event(s, 1, 0, 0, EPOLL_CTL_ADD, newc) == -1) // LT 本项目使用LT模式
         {
             // 增加事件失败。失败日志在ngx_epoll_add_event中写过了
-            ngx_close_accepted_connection(newc);
+            ngx_close_connection(newc);
             return; // 直接返回
         }
 
@@ -169,18 +169,4 @@ void CSocket::ngx_event_accept(lpngx_connection_t oldc)
     
     return;
 
-}
-
-// 用户连入，我们accept4()时，得到的socket在处理中产生失败，则资源用这个函数进行释放【因为这里涉及到好几个要释放的资源，所以写成函数】
-void CSocket::ngx_close_accepted_connection(lpngx_connection_t c)
-{
-    int fd = c->fd;
-    ngx_free_connection(c);
-    c->fd = -1;
-    if (close(fd) == -1)
-    {
-        ngx_log_error_core(NGX_LOG_ALERT, errno, "CSocekt::ngx_close_accepted_connection()中close(%d)失败!",fd);
-    }
-    return;
-    
 }

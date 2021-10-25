@@ -19,6 +19,7 @@
 #include "ngx_global.h"
 #include "ngx_func.h"
 #include "ngx_c_socket.h"
+#include "ngx_c_memory.h"
 
 // 从连接池中获取一个空闲连接，【当一个客户端tcp连接进入，我希望把这个连接和我连接池中的一个连接【对象】绑到一起，后续可以通过这个连接，把这个对象找到，因为对象里可以记录各种信息】
 lpngx_connection_t CSocket::ngx_get_connection(int isock)
@@ -42,8 +43,14 @@ lpngx_connection_t CSocket::ngx_get_connection(int isock)
 
     // 2）把已往有用的数据搞出来后，清空并给适当值
     memset(c, 0, sizeof(ngx_connection_t));             // 注意类型不要用错为lpngx_connection_t，否者就出错了
-    c->fd = isock;
-    // 其他内容后续添加
+    c->fd = isock;                                      //套接字要保存起来，这东西具有唯一性   
+    c->curStat = _PKG_HD_INIT;                          //收包状态处于 初始状态，准备接收数据包头【状态机】
+
+    c->precvbuf = c->dataHeadInfo;                       //收包我要先收到这里来，因为我要先收包头，所以收数据的buff直接就是dataHeadInfo
+    c->irecvlen = sizeof(COMM_PKG_HEADER);               //这里指定收数据的长度，这里先要求收包头这么长字节的数据
+
+    c->ifnewrecvMem = false;                             //标记我们并没有new内存，所以不用释放	 
+    c->pnewMemPointer = NULL;                            //既然没new内存，那自然指向的内存地址先给NULL
 
     // 3）这个值有用，所以在上面 (1)中被保留，没有被清空，这里又把这个值赋回来
     c->instance = !instance;                            // 官方nginx写法，【分配内存的时候，连接池中每个对象这个变量给的值都为1，所以这里取反应该是0，【有效】】
@@ -58,6 +65,16 @@ lpngx_connection_t CSocket::ngx_get_connection(int isock)
 // 归还参数C所代表的连接到连接池中，注意参数类型是lpngx_connection_t
 void CSocket::ngx_free_connection(lpngx_connection_t c)
 {
+
+    if (c->ifnewrecvMem == true)
+    {
+        // 我们曾经给这个连接分配过内存，则要释放内存
+        CMemory::GetInstance()->FreeMemory(c->pnewMemPointer);
+        c->pnewMemPointer = NULL;
+        c->ifnewrecvMem = false;
+    }
+    
+
     c->data = m_pfree_connections;                      // 回收的节点指向原来串起来的空闲链的链头
 
     // 节点本身也要做些事情
@@ -66,4 +83,18 @@ void CSocket::ngx_free_connection(lpngx_connection_t c)
     m_pfree_connections = c;                            // 修改 原来的链头使链头指向新节点
     ++m_free_connection_n;                              // 空闲连接+1
     return;
+}
+
+// 用户连入，我们在accept4()时，得到的socket在处理中产生失败，则资源用这个函数进行释放，【因为这里涉及到好几个要释放的资源，所以写成函数】
+// 我们把ngx_close_accepted_connection()函数改名，为的是让名字更加通用，并从文件ngx_socket_accept.cxx中迁移到本文件中，并改造其中代码
+void CSocket::ngx_close_connection(lpngx_connection_t c)
+{
+    if (close(c->fd) == -1)
+    {
+        ngx_log_error_core(NGX_LOG_ALERT, errno, "CSocket::ngx_close_connection()中close(%d)失败!",c->fd);
+    }
+    c->fd = -1;
+    ngx_free_connection(c);     // 把释放代码写在最后
+    return;
+    
 }

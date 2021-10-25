@@ -3,8 +3,11 @@
 #define __NGX_SOCKET_H__
 
 #include <vector>      //vector
+#include <list>         // list
 #include <sys/epoll.h> //epoll
 #include <sys/socket.h>
+
+#include "ngx_comm.h"
 
 // 一些宏定义-----------------------------------------------
 #define NGX_LISTEN_BACKLOG  511      // 已完成链接队列，nginx官方给511
@@ -42,6 +45,17 @@ struct ngx_connection_s
 
     ngx_event_handler_pt        rhandler;           // 读事件的相关处理方法
     ngx_event_handler_pt        whandler;           // 写事件的相关处理方法
+
+    // 和收包有关
+
+    unsigned char               curStat;            // 当前收包的状态
+    char                        dataHeadInfo[_DATA_BUFSIZE_];       // 用于保存收到的数据的包头信息
+    char                        *precvbuf;                          // 接收数据缓冲区的头指针，对收到不全的包非常有用，看具体应用的代码
+    unsigned                    irecvlen;                           // 要接收到多少数据，由这个变量指定，和precvbuf配套使用，具体应用看代码
+
+    bool                        ifnewrecvMem;                       // 如果我们成功的收到了包头，那么我们就要分配内存开始保存，包头+包体内容；
+                                                                    // 这个标记用来保存我们是否new过内存，如果new过，是需要进行内存释放的
+    char                        *pnewMemPointer;                    // new出来的用于收包的内存首地址，和ifnewrecvMem配合使用
 
 
     // ------------------------------------------
@@ -85,8 +99,16 @@ class CSocket
         void ngx_event_accept(lpngx_connection_t oldc);     // 建立新连接
         void ngx_wait_request_handler(lpngx_connection_t c);    // 设置数据来的时候的读处理函数
 
-        void ngx_close_accepted_connection(lpngx_connection_t c);   // 用户连入，我们accept()的时候，得到的socket在处理中产生失败，则资源用这个函数进行释放
+        void ngx_close_connection(lpngx_connection_t c);   // 用户连入，我们accept()的时候，得到的socket在处理中产生失败，则资源用这个函数进行释放[改为通用连接关闭函数]
                                                                     // 因为这里涉及到好几个要释放的资源，所以写成函数
+
+        ssize_t recvproc(lpngx_connection_t c, char *buff, ssize_t buflen);             // 接收从客户端来的数据专用函数
+        void ngx_wait_request_handler_proc_p1(lpngx_connection_t c);                    // 包头接收完整后的处理函数，这里称之为包处理阶段1，写成函数方便复用
+        void ngx_wait_request_handler_proc_plast(lpngx_connection_t c);                 // 收到一个完整的包后的处理函数
+        void inMsgRecvQueue(char *buf);                                                 // 收到一个完整的消息后，入消息队列
+        void tmpoutMsgRecvQueue();      // 临时清除队列中的消息的函数，测试使用，将来会进行删除
+        void clearMsgRecvQueue();                                                       // 清理消息队列
+
         
         // 获取对端信息相关
         size_t ngx_sock_ntop(struct sockaddr *sa, int port, u_char *text,size_t len);   // 根据参数1给定的信息，获取地址端口字符串，返回这个字符串的长度
@@ -116,6 +138,12 @@ class CSocket
         std::vector<lpngx_listening_t>  m_ListenSocketList;     // 监听套接字队列
 
         struct  epoll_event             m_events[NGX_MAX_EVENTS];   // 用于在epoll_wait()中承载返回的所发生的事件
+
+        //一些和网络通讯有关的成员变量
+        size_t                         m_iLenPkgHeader;                    //sizeof(COMM_PKG_HEADER);		
+        size_t                         m_iLenMsgHeader;                    //sizeof(STRUC_MSG_HEADER);
+        //消息队列
+        std::list<char *>              m_MsgRecvQueue;                     //接收数据消息队列 
 };
 
 #endif

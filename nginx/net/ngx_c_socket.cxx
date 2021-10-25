@@ -139,7 +139,7 @@ bool CSocket::ngx_open_listening_sockets()
         // 设置socket为非阻塞
         if(setnonblocking(isock) == false)
         {
-            ngx_log_stderr(errno, "CSocekt::Initialize()中setnonblocking()失败,i=%d.",i);
+            ngx_log_stderr(errno, "CSocket::Initialize()中setnonblocking()失败,i=%d.",i);
             close(isock);
             return false;
         }
@@ -159,7 +159,7 @@ bool CSocket::ngx_open_listening_sockets()
         */
         if(bind(isock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1)
         {
-            ngx_log_stderr(errno, "CSocekt::Initialize()中bind()失败,i=%d.",i);
+            ngx_log_stderr(errno, "CSocket::Initialize()中bind()失败,i=%d.",i);
             close(isock);
             return false;
         }
@@ -167,7 +167,7 @@ bool CSocket::ngx_open_listening_sockets()
         // 开始监听
         if(listen(isock, NGX_LISTEN_BACKLOG) == -1)
         {
-            ngx_log_stderr(errno, "CSocekt::Initialize()中listen()失败,i=%d.",i);
+            ngx_log_stderr(errno, "CSocket::Initialize()中listen()失败,i=%d.",i);
             close(isock);
             return false;
         }
@@ -202,13 +202,13 @@ bool CSocket::setnonblocking(int sockfd)
     // int opts = fcntl(sockfd, F_GETFL);  // 用F_GETL先获取描述符的一些标志信息
     // if(opts < 0)
     // {
-    //     ngx_log_stderr(errno,"CSocekt::setnonblocking()中fcntl(F_GETFL)失败.");
+    //     ngx_log_stderr(errno,"CSocket::setnonblocking()中fcntl(F_GETFL)失败.");
     //     return false;
     // }
     // opts |= O_NONBLOCK; // 把非阻塞标记加到原来的标记上，标记这是一个非租塞套接字，【如何关闭非阻塞呢？opts &= ~O_NONBLOCK;然后再F_SETFL 一下即可】
     // if(fcntl(sockfd, F_SETFL, opts) < 0)
     // {
-    //     ngx_log_stderr(errno,"CSocekt::setnonblocking()中fcntl(F_SETFL)失败.");
+    //     ngx_log_stderr(errno,"CSocket::setnonblocking()中fcntl(F_SETFL)失败.");
     //     return false;
     // }
     // return true;
@@ -284,7 +284,7 @@ int CSocket::ngx_epoll_init()
         if(c == NULL)
         {
             // 这是致命问题，刚开始怎么可能连接池就为空呢？
-            ngx_log_stderr(errno,"CSocekt::ngx_epoll_init()中ngx_get_connection()失败.");
+            ngx_log_stderr(errno,"CSocket::ngx_epoll_init()中ngx_get_connection()失败.");
             exit(2); // 致命问题，直接退，交给系统处理释放
         }
         c->listening = (*pos);      // 连接对象 和 监听对象关联，方便通过连接对象找到监听对象
@@ -375,7 +375,7 @@ int CSocket::ngx_epoll_add_event(int fd, int readevent, int writeevent, uint32_t
 
     if(epoll_ctl(m_epollhandle, eventtype,fd,&ev) == -1)
     {
-        ngx_log_stderr(errno, "CSocekt::ngx_epoll_add_event()中epoll_ctl(%d,%d,%d,%u,%u)失败.",fd,readevent,writeevent,otherflag,eventtype);
+        ngx_log_stderr(errno, "CSocket::ngx_epoll_add_event()中epoll_ctl(%d,%d,%d,%u,%u)失败.",fd,readevent,writeevent,otherflag,eventtype);
         // exit(2); // 致命问题，直接退出，资源交由系统释放，后来发现不能直接退
         return -1;
     }
@@ -407,13 +407,13 @@ int CSocket::ngx_epoll_process_events(int timer)
         if(errno == EINTR)
         {
             // 信号所导致，直接返回，一般认为这不是什么毛病，但是还是打印日志记录一下，因为一般也不会认为给worker进程发送消息
-            ngx_log_error_core(NGX_LOG_INFO,errno,"CSocekt::ngx_epoll_process_events()中epoll_wait()失败!");
+            ngx_log_error_core(NGX_LOG_INFO,errno,"CSocket::ngx_epoll_process_events()中epoll_wait()失败!");
             return 1;   // 正常返回
         }
         else
         {
             // 这里被认为应该是有问题的，记录日志
-            ngx_log_error_core(NGX_LOG_ALERT,errno,"CSocekt::ngx_epoll_process_events()中epoll_wait()失败!");
+            ngx_log_error_core(NGX_LOG_ALERT,errno,"CSocket::ngx_epoll_process_events()中epoll_wait()失败!");
             return 0;   // 非正常返回
         }
     }
@@ -426,7 +426,7 @@ int CSocket::ngx_epoll_process_events(int timer)
             return 1;
         }
         // 无限等待【所以不存在超时】，但是却没有任何返回事件，这应该不正常有问题
-        ngx_log_error_core(NGX_LOG_ALERT,0,"CSocekt::ngx_epoll_process_events()中epoll_wait()没超时却没返回任何事件!"); 
+        ngx_log_error_core(NGX_LOG_ALERT,0,"CSocket::ngx_epoll_process_events()中epoll_wait()没超时却没返回任何事件!"); 
         return 0; //非正常返回 
     }
 
@@ -453,7 +453,7 @@ int CSocket::ngx_epoll_process_events(int timer)
             // 第三个事件：假如这个第三个事件也跟第一个事件对应的是同一个连接，那么这个条件就会成立，那么这种事件就属于过期事件，不应该处理
 
             // 这里可以增加个日志，
-            ngx_log_error_core(NGX_LOG_DEBUG,0,"CSocekt::ngx_epoll_process_events()中遇到了fd=-1的过期事件:%p.",c); 
+            ngx_log_error_core(NGX_LOG_DEBUG,0,"CSocket::ngx_epoll_process_events()中遇到了fd=-1的过期事件:%p.",c); 
             continue; //这种事件就不处理即可
         }
 
@@ -475,7 +475,7 @@ int CSocket::ngx_epoll_process_events(int timer)
             // 然后照旧被单做新事件处理了，
             // 如果是这样，那就只能被照旧处理了，可能会照成偶尔某个连接被误关闭？但是整体服务器程序运行应该是平稳的，问题不大。这种漏网之鱼而被单做没过期来的过期事件理论上是极少发生的
 
-            ngx_log_error_core(NGX_LOG_DEBUG,0,"CSocekt::ngx_epoll_process_events()中遇到了instance值改变的过期事件:%p.",c); 
+            ngx_log_error_core(NGX_LOG_DEBUG,0,"CSocket::ngx_epoll_process_events()中遇到了instance值改变的过期事件:%p.",c); 
             continue;   // 这种事件不处理即可
         }
 
