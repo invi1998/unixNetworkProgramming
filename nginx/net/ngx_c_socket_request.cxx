@@ -46,17 +46,17 @@ void CSocekt::ngx_wait_request_handler(lpngx_connection_t c)
     // LT模式测试代码
     // 水平触发如果没有正确处理客户端关闭情况，那么水平触发就会在客户端关闭的时候不断的触发
     // 因为客户端关闭也是可读
-    unsigned char buf[10] = {0};
-    memset(buf, 0, sizeof(buf));
-    int n = recv(c->fd, 2, 0);      // 每次只接收两个字节
-    if (n == 0)
-    {
-        // 连接关闭
-        ngx_free_connection(c);
-        close(c->fd);
-        c->fd = -1;
-    }
-    ngx_log_stderr(0, "成功， 收到的字节数为%d, 内容为%s", n, buf);
+    // unsigned char buf[10] = {0};
+    // memset(buf, 0, sizeof(buf));
+    // int n = recv(c->fd, 2, 0);      // 每次只接收两个字节
+    // if (n == 0)
+    // {
+    //     // 连接关闭
+    //     ngx_free_connection(c);
+    //     close(c->fd);
+    //     c->fd = -1;
+    // }
+    // ngx_log_stderr(0, "成功， 收到的字节数为%d, 内容为%s", n, buf);
 
     return;
 }
