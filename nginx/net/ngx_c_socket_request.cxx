@@ -144,9 +144,155 @@ ssize_t CSocket::recvproc(lpngx_connection_t c, char *buff, ssize_t buflen)     
 
         // 所有从这里走下来的错误，都认为是异常：意味着我们要关闭客户端套接字，要回收连接池中的连接
         
+        if (errno == ECONNRESET)    //     #define ECONNRESET      108 /* Connection reset by peer (对等方重置连接) */
+        {
+            // 如果客户端没有正常关闭socket连接，却关闭了整个运行程序【也就是没有给服务器发送4次挥手包完成连接断开，而是直接发送rst包】那么就会产生整个错误
+            // 10054（WSAECONNRESET）--远程程序正在连接的时候关闭会产生整个错误--远程主机强迫关闭了一个现有的连接
+            // 算是常规错误【普通信息类型】日志都可以不用打印
+
+            // 遇到的一些很普通的错误信息，都可以往这里加
+        }
+        else
+        {
+            // 能走到这里的，都表示错误，打印日志
+            ngx_log_stderr(errno,"CSocket::recvproc()中发生错误，我打印出来看看是啥错误！");  //正式运营时可以考虑这些日志打印去掉
+        }
         
+        //ngx_log_stderr(0,"连接被客户端 非 正常关闭！");
+        ngx_close_connection(c);
+        return -1;
     }
     
-    
+    // 能走到这里的，就认为收到了有效数据
+    return n;   // 返回收到的字节数
 
+}
+
+// 包头收完整后的处理，包处理阶段1
+void CSocket::ngx_wait_request_handler_proc_p1(lpngx_connection_t c)
+{
+    CMemory *p_memory = CMemory::GetInstance();
+
+    LPCOMM_PKG_HEADER pPkgHeader;
+    pPkgHeader = (LPCOMM_PKG_HEADER)c->dataHeadInfo;    // 正好收到包头时，包头信息肯定在dataHeadInfo里
+
+    unsigned short e_pkgLen;
+    e_pkgLen = ntohs(pPkgHeader->pkgLen);
+    // 注意这里网络序转为本机序，所有传输到网络上的2字节数据，都要用htons()转为网络序，所有从网络上收到的2字节数据，都要用ntohs()转为本机序 
+    // ntohs/htons的目的就是保证不同操作系统之间收发数据的正确性【不管是客户端、服务器是什么操作系统，发送的数字是多少，收到的就是多少】
+
+    // 恶意包或者错误包的判断
+    if (e_pkgLen < m_iLenPkgHeader)
+    {
+        // 伪装包、或者包错误，否者整个包长怎么可能比包头还小？（整个包长是包头+包体,就算包体为0字节，那么至少e_pkgLen == m_iLenPkgHeader）
+        // 报文总长度 < 包头长度，认定非法用户，废包
+        // 状态和接收位置都复原，这些字都有必要，因为有可能在其他状态比如_PKG_HD_RECVING状态调用这个函数
+        c->curStat = _PKG_HD_INIT;
+        c->precvbuf = c->dataHeadInfo;
+        c->irecvlen = m_iLenMsgHeader;
+
+    }
+    else if (e_pkgLen > (_PKG_MAX_LENGTH-1000)) // 客户端发送来的包居然说包长度 > 29000 ? 判定为恶意包
+    {
+        // 恶意包，太大，认定为非法用户，废包【包头中说这个包总长度这么大，这不行】
+        // 状态和接收位置都复原，这些值都有必要，因为有可能在其他状态比如_PKG_HD_RECVING状态调用这函数
+        c->curStat = _PKG_HD_INIT;
+        c->precvbuf = c->dataHeadInfo;
+        c->irecvlen = m_iLenMsgHeader;
+    }
+    else
+    {
+        // 合法的包头，继续处理
+        // 现在要分配内存，开始接收包体，因为包体总长度并不是固定的，所以内存肯定要new出来
+        char *pTmpBuffer = (char *)p_memory->AllocMemory(m_iLenMsgHeader + e_pkgLen, false);    // 分配内存【长度是 消息头长度 + 包体长度】最后参数先给false，表示内存不需要memset
+        c->ifnewrecvMem = true;         // 标记我们new了内存，将来在ngx_free_connextion()要进行内存回收
+        c->pnewMemPointer = pTmpBuffer;     // 内存开始指针
+
+
+        // 1）先填写消息头内容
+        LPSTRUC_MSG_HEADER ptmpMsgHeader = (LPSTRUC_MSG_HEADER)pTmpBuffer;
+        ptmpMsgHeader->pConn = c;
+        ptmpMsgHeader->iCurrsequence = c->iCurrsequence;    // 收到包时的连接池中连接序号记录到信息头中来，以备后续使用
+        // 2）再填写包头内容
+        pTmpBuffer += m_iLenMsgHeader;                      // 往后跳，跳过消息头，指向包头
+        memcpy(pTmpBuffer, pPkgHeader, m_iLenMsgHeader);    // 直接把收到的包头拷贝进来
+        if (e_pkgLen == m_iLenPkgHeader)
+        {
+            // 该报文只有包头无包体【允许一个包只有包头，没有包体】
+            // 这相当于收完整了，则直接接入消息队列带后续业务逻辑线程去处理
+            ngx_wait_request_handler_proc_plast(c);
+        }
+        else
+        {
+            // 开始接收包体
+            c->curStat = _PKG_BD_INIT;                      // 单前状态发生改变，包头刚好收完，准备接收包体
+            c->precvbuf = pTmpBuffer + m_iLenMsgHeader;     // pTmpBuffer指向包头，这里 + m_iLenPkgHeader后指向包体位置
+            c->irecvlen = e_pkgLen - m_iLenMsgHeader;       // e_pkgLen是整个包【包体+包头】大小，-m_iLenPkgHeader【包头】 = 包体
+        }
+
+    }
+    
+    return;
+    
+}
+
+// 收到一个完整的包后的处理函数 【plast表示最后阶段】
+void CSocket::ngx_wait_request_handler_proc_plast(lpngx_connection_t c)
+{
+    // 把这段内存放到消息队列中来
+    inMsgRecvQueue(c->pnewMemPointer);
+    // ---------这里可能考虑触发业务逻辑，怎么触发业务逻辑，后续实现
+
+    c->ifnewrecvMem     = false;            // 内存不再需要释放，因为你收完整了包，这个包被上面调用inMsgRecvQueue()移入消息队列，那么释放内存就属于业务逻辑去干， 不需要回收连接到连接池中做了
+    c->pnewMemPointer   = NULL;
+    c->curStat          = _PKG_HD_INIT;     // 收包状态机的状态恢复为原始态，为收下一个包做准备
+    c->precvbuf         = c->dataHeadInfo;  // 设置好收包的位置
+    c->irecvlen         = m_iLenMsgHeader;  // 设置好要接收的数据的大小
+    return；
+}
+
+// 当收到一个完整包之后，将完整包移入消息队列，这个包在服务器端应该是 消息头+包头+包体 格式
+void CSocket::inMsgRecvQueue(char *buf)     // buf这段内存 ： 消息头 + 包头 + 包体
+{
+    m_MsgRecvQueue.push_back(buf);
+
+    // ....其他功能待扩充，记住一点;这里的内存是需要进行释放的，-----释放代码后续增加
+    // ....而且处理逻辑应该引入多线程，所以这里要考虑临界问题
+    
+    // 临时在这里调用一下该函数，以防止接收消息队列过大
+    tmpoutMsgRecvQueue();   // ... 临时，后续会取消这行代码
+
+    // 为了测试方便，因为本函数一位着收到了这个完整的数据包，所以这里打印一个信息
+    ngx_log_stderr(0,"非常好，收到了一个完整的数据包【包头+包体】！");
+
+}
+
+
+// 临时函数。用于将Msg中的消息进行释放
+void CSocket::tmpoutMsgRecvQueue()
+{
+    // 日后可能会引入outMsgRecvQueue()，这个函数可能需要临界
+    if (m_MsgRecvQueue.empty())     // 没有消息直接退出
+    {
+        return;
+    }
+    int size = m_MsgRecvQueue.size();
+    if (size < 1000)    // 消息不超过1000条就先不处理
+    {
+        return;
+    }
+
+    // 消息达到1000条
+    CMemory *p_memory = CMemory::GetInstance();
+    int cha = size - 500;
+    for (int i = 0; i < cha; ++i)
+    {
+        // 一次干掉一堆
+        char *sTmpMsgBuf = m_MsgRecvQueue.front();//返回第一个元素但不检查元素存在与否
+        m_MsgRecvQueue.pop_front();               //移除第一个元素但不返回	
+        p_memory->FreeMemory(sTmpMsgBuf);         //先释放掉把；
+    }
+    
+    return;
+    
 }

@@ -64,6 +64,13 @@ struct ngx_connection_s
 
 
 }
+//消息头，引入的目的是当收到数据包时，额外记录一些内容以备将来使用
+typedef struct _STRUC_MSG_HEADER
+{
+	lpngx_connection_t pConn;         //记录对应的链接，注意这是个指针
+	uint64_t           iCurrsequence; //收到数据包时记录对应连接的序号，将来能用于比较是否连接已经作废用
+	//......其他以后扩展	
+}STRUC_MSG_HEADER,*LPSTRUC_MSG_HEADER;
 
 // 每个TCP连接至少需要一个读事件和一个写事件，所以定义事件结构
 // typedef struct  ngx_event_s
