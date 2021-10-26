@@ -90,6 +90,8 @@ class CSocket
 
     public:
         virtual bool Initialize();                          // 初始化函数
+        char *outMsgRecvQueue();                            // 将一个消息出消息队列
+        virtual void threadRecvProcFunc(char *pMsgBuf);     // 处理客户端请求，虚函数，因为将来可以考虑自己来写子类继承本类
 
     public:
         int ngx_epoll_init();                               // epoll功能初始化
@@ -115,7 +117,7 @@ class CSocket
         void ngx_wait_request_handler_proc_p1(lpngx_connection_t c);                    // 包头接收完整后的处理函数，这里称之为包处理阶段1，写成函数方便复用
         void ngx_wait_request_handler_proc_plast(lpngx_connection_t c);                 // 收到一个完整的包后的处理函数
         void inMsgRecvQueue(char *buf);                                                 // 收到一个完整的消息后，入消息队列
-        void tmpoutMsgRecvQueue();      // 临时清除队列中的消息的函数，测试使用，将来会进行删除
+        // void tmpoutMsgRecvQueue();      // 临时清除队列中的消息的函数，测试使用，将来会进行删除
         void clearMsgRecvQueue();                                                       // 清理消息队列
 
         
@@ -153,6 +155,10 @@ class CSocket
         size_t                         m_iLenMsgHeader;                    //sizeof(STRUC_MSG_HEADER);
         //消息队列
         std::list<char *>              m_MsgRecvQueue;                     //接收数据消息队列 
+        int                            m_iRecvMsgQueueCount;               //收消息队列大小
+
+        //多线程相关
+	    pthread_mutex_t                m_recvMessageQueueMutex;            //收消息队列互斥量 
 };
 
 #endif

@@ -14,6 +14,7 @@
 //#include <sys/socket.h>
 #include <sys/ioctl.h> //ioctl
 #include <arpa/inet.h>
+#include <pthread.h>   //多线程
 
 #include "ngx_c_conf.h"
 #include "ngx_macro.h"
@@ -21,6 +22,7 @@
 #include "ngx_func.h"
 #include "ngx_c_socket.h"
 #include "ngx_c_memory.h"
+#include "ngx_c_lockmutex.h"  //自动释放互斥量的一个类
 
 //来数据时候的处理，当连接上有数据来的时候，本函数会被ngx_epoll_process_events()所调用  ,官方的类似函数为ngx_http_wait_request_handler();
 void CSocket::ngx_wait_request_handler(lpngx_connection_t c)
@@ -247,7 +249,8 @@ void CSocket::ngx_wait_request_handler_proc_p1(lpngx_connection_t c)
 void CSocket::ngx_wait_request_handler_proc_plast(lpngx_connection_t c)
 {
     // 把这段内存放到消息队列中来
-    inMsgRecvQueue(c->pnewMemPointer);
+    int irmqc = 0;    // 消息队列中当前消息数量
+    inMsgRecvQueue(c->pnewMemPointer, irmqc);
     // 注意这里，我们把这段new出来的内存放到消息队列中，那么后续这段内存就不归连接池管理了
     // 也就是说，这段内存的释放就不能再连接池中进行释放了，而应该放到具体的业务函数中进行处理
     // 所以下面才会把ifnewrecvMem内存释放标记设置为false，指向内存的指针也设置为空NULL
@@ -262,47 +265,77 @@ void CSocket::ngx_wait_request_handler_proc_plast(lpngx_connection_t c)
 }
 
 // 当收到一个完整包之后，将完整包移入消息队列，这个包在服务器端应该是 消息头+包头+包体 格式
-void CSocket::inMsgRecvQueue(char *buf)     // buf这段内存 ： 消息头 + 包头 + 包体
+void CSocket::inMsgRecvQueue(char *buf, int &irmqc)     // buf这段内存 ： 消息头 + 包头 + 包体
 {
-    m_MsgRecvQueue.push_back(buf);
+
+    CLock lock(&m_recvMessageQueueMutex);       // 自动加锁很方便，不需要手动去解锁
+    m_MsgRecvQueue.push_back(buf);              // 入消息队列
+    ++m_iRecvMsgQueueCount;                     // 收消息队列数字+1，
+    irmqc = m_iRecvMsgQueueCount;               // 接收消息队列当前信息数量保存到irmqc中
+
+    // m_MsgRecvQueue.push_back(buf);
 
     // ....其他功能待扩充，记住一点;这里的内存是需要进行释放的，-----释放代码后续增加
     // ....而且处理逻辑应该引入多线程，所以这里要考虑临界问题
     
     // 临时在这里调用一下该函数，以防止接收消息队列过大
-    tmpoutMsgRecvQueue();   // ... 临时，后续会取消这行代码
+    // tmpoutMsgRecvQueue();   // ... 临时，后续会取消这行代码
 
     // 为了测试方便，因为本函数一位着收到了这个完整的数据包，所以这里打印一个信息
-    ngx_log_stderr(0,"非常好，收到了一个完整的数据包【包头+包体】！");
+    // ngx_log_stderr(0,"非常好，收到了一个完整的数据包【包头+包体】！");
 
+}
+
+//从消息队列中把一个包提取出来以备后续处理
+char *CSocket::outMsgRecvQueue() 
+{
+    CLock lock(&m_recvMessageQueueMutex);	//互斥
+    if(m_MsgRecvQueue.empty())
+    {
+        return NULL; //也许会存在这种情形： 消息本该有，但被干掉了，这里可能为NULL的？        
+    }
+    char *sTmpMsgBuf = m_MsgRecvQueue.front(); //返回第一个元素但不检查元素存在与否
+    m_MsgRecvQueue.pop_front();                //移除第一个元素但不返回	
+    --m_iRecvMsgQueueCount;                    //收消息队列数字-1
+    return sTmpMsgBuf;                         
 }
 
 
 // 临时函数。用于将Msg中的消息进行释放
-void CSocket::tmpoutMsgRecvQueue()
-{
-    // 日后可能会引入outMsgRecvQueue()，这个函数可能需要临界
-    if (m_MsgRecvQueue.empty())     // 没有消息直接退出
-    {
-        return;
-    }
-    int size = m_MsgRecvQueue.size();
-    if (size < 1000)    // 消息不超过1000条就先不处理
-    {
-        return;
-    }
+// void CSocket::tmpoutMsgRecvQueue()
+// {
+//     // 日后可能会引入outMsgRecvQueue()，这个函数可能需要临界
+//     if (m_MsgRecvQueue.empty())     // 没有消息直接退出
+//     {
+//         return;
+//     }
+//     int size = m_MsgRecvQueue.size();
+//     if (size < 1000)    // 消息不超过1000条就先不处理
+//     {
+//         return;
+//     }
 
-    // 消息达到1000条
-    CMemory *p_memory = CMemory::GetInstance();
-    int cha = size - 500;
-    for (int i = 0; i < cha; ++i)
-    {
-        // 一次干掉一堆
-        char *sTmpMsgBuf = m_MsgRecvQueue.front();//返回第一个元素但不检查元素存在与否
-        m_MsgRecvQueue.pop_front();               //移除第一个元素但不返回	
-        p_memory->FreeMemory(sTmpMsgBuf);         //先释放掉把；
-    }
+//     // 消息达到1000条
+//     CMemory *p_memory = CMemory::GetInstance();
+//     int cha = size - 500;
+//     for (int i = 0; i < cha; ++i)
+//     {
+//         // 一次干掉一堆
+//         char *sTmpMsgBuf = m_MsgRecvQueue.front();//返回第一个元素但不检查元素存在与否
+//         m_MsgRecvQueue.pop_front();               //移除第一个元素但不返回	
+//         p_memory->FreeMemory(sTmpMsgBuf);         //先释放掉把；
+//     }
     
+//     return;
+    
+// }
+
+
+//消息处理线程主函数，专门处理各种接收到的TCP消息
+//pMsgBuf：发送过来的消息缓冲区，消息本身是自解释的，通过包头可以计算整个包长
+//         消息本身格式【消息头+包头+包体】 
+void CSocket::threadRecvProcFunc(char *pMsgBuf)
+{
+
     return;
-    
 }
