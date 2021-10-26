@@ -10,6 +10,8 @@
 #include "ngx_macro.h"   //各种宏定义
 #include "ngx_func.h"    //各种函数声明
 #include "ngx_c_conf.h"  //和配置文件处理相关的类,名字带c_表示和类有关
+#include "ngx_c_socket.h"  //和socket通讯相关
+#include "ngx_c_memory.h"  //和内存分配释放等相关
 
 
 //本文件用的函数声明
@@ -39,6 +41,7 @@ int main(int argc, char *const *argv)
 
     int exitcode = 0;           //退出代码，先给0表示正常退出
     int i;                      //临时用
+    CMemory *p_memory;
 
     //(1)无伤大雅也不需要释放的放最上边    
     ngx_pid    = getpid();      //取得进程pid
@@ -74,6 +77,9 @@ int main(int argc, char *const *argv)
         exitcode = 2; //标记找不到文件
         goto lblexit;
     }
+
+    // （2.1）内存单例类可以在这里初始化，返回值不用保存
+    CMemory::GetInstance();
 
     //(3)一些必须事先准备好的资源，先初始化
     ngx_log_init();             //日志初始化(创建/打开日志文件)，这个需要配置项，所以必须放配置文件载入的后边；

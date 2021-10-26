@@ -21,6 +21,7 @@
 #include "ngx_global.h"
 #include "ngx_func.h"
 #include "ngx_c_socket.h"
+#include "ngx_c_memory.h"
 
 // 构造函数
 CSocket::CSocket()
@@ -36,6 +37,11 @@ CSocket::CSocket()
 
     // m_pread_events = NULL;          // 读事件数组给空
     // m_pwrite_events = NULL;         // 写事件数组给空
+
+    //一些和网络通讯有关的常用变量值，供后续频繁使用时提高效率
+    m_iLenPkgHeader = sizeof(COMM_PKG_HEADER);    //包头的sizeof值【占用的字节数】
+    m_iLenMsgHeader =  sizeof(STRUC_MSG_HEADER);  //消息头的sizeof值【占用的字节数】
+
     return;
 }
 
@@ -67,8 +73,29 @@ CSocket::~CSocket()
         delete []m_pconnections;
     }
 
+    // 3）接收消息队列中的内容释放
+    clearMsgRecvQueue();
+
     return;
 }
+
+// 各种清理函数--------------------------
+// 清理接收消息队列
+void CSocket::clearMsgRecvQueue()
+{
+    char * sTmpMempoint;
+    CMemory *p_memory = CMemory::GetInstance();
+
+    // 临界与否，这里暂时不考虑，等到后面线程池再考虑
+    while (!m_MsgRecvQueue.empty())
+    {
+        sTmpMempoint = m_MsgRecvQueue.front();
+        m_MsgRecvQueue.pop_front();
+        p_memory->FreeMemory(sTmpMempoint);
+    }
+    
+}
+
 
 // 初始化函数【fork()子进程之前需要做的事】
 // 成功返回true,失败返回false

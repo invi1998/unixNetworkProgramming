@@ -125,10 +125,13 @@ ssize_t CSocket::recvproc(lpngx_connection_t c, char *buff, ssize_t buflen)     
     // 客户端没断，走到这里
     if (n < 0)  // 这里被认为有错误发生
     {
-        // EAGAIN和EWOULDBLOCK【这个应该常用在hp上】应该是一样的值，表示没有收到数据。一般来讲，在ET模式下会出现这个错误，因为ET模式下是不停的recv，肯定有一个时刻会收到这个errno，但是LT模式下一般是来事件才会收，所以不会出现这个返回值
+        // EAGAIN和EWOULDBLOCK【EWOULDBLOCK这个错误码应该常用在惠普的系统上】应该是一样的值，表示没有收到数据。一般来讲，在ET模式下会出现这个错误，因为ET模式下是不停的recv，肯定有一个时刻会收到这个errno，但是LT模式下一般是来事件才会收，所以不会出现这个返回值
         if (errno == EAGAIN || errno == EWOULDBLOCK)
         {
             // 这里认为LT模式不该出现这个errno，而且其实这个也不是一个错误，所以不当错误进行处理
+            // 因为这个EAGAIN错误码是属于ET模式，不断的recv，直到把所有数据包收完了，收不到数据包了，recv()返回-1，errno才会变成EAGAIN
+            // 但是LT模式下，是有数据的时候系统通知你来recv，所以你不会不停的一直recv，就不会出现这个错误
+            // 注意这种错误不属于客户端的socket关闭，所以可以直接返回
             ngx_log_stderr(errno,"CSocket::recvproc()中errno == EAGAIN || errno == EWOULDBLOCK成立，出乎我意料！");//epoll为LT模式不应该出现这个返回值，所以直接打印出来瞧瞧
             return -1; //不当做错误处理，只是简单返回
         }
@@ -137,7 +140,8 @@ ssize_t CSocket::recvproc(lpngx_connection_t c, char *buff, ssize_t buflen)     
         // 例如：在socket服务器端，设置了信号捕获机制，有子进程，当在父进程阻塞于慢系统调用时，由父进程吧捕获到了一个有效信号时，内核会致使accept返回一个EINTR错误（被中断的系统调用）
         if (errno == EINTR)     // 这个不算错误，参考官方nginx
         {
-            //我认为LT模式不该出现这个errno，而且这个其实也不是错误，所以不当做错误处理
+            // 我认为LT模式不该出现这个errno，而且这个其实也不是错误，所以不当做错误处理
+            // 因为我们这里是非阻塞套接字，所以这里其实也不该出现这个错误
             ngx_log_stderr(errno,"CSocekt::recvproc()中errno == EINTR成立，出乎我意料！");//epoll为LT模式不应该出现这个返回值，所以直接打印出来瞧瞧
             return -1; //不当做错误处理，只是简单返回
         }
@@ -189,7 +193,7 @@ void CSocket::ngx_wait_request_handler_proc_p1(lpngx_connection_t c)
         // 状态和接收位置都复原，这些字都有必要，因为有可能在其他状态比如_PKG_HD_RECVING状态调用这个函数
         c->curStat = _PKG_HD_INIT;
         c->precvbuf = c->dataHeadInfo;
-        c->irecvlen = m_iLenMsgHeader;
+        c->irecvlen = m_iLenPkgHeader;
 
     }
     else if (e_pkgLen > (_PKG_MAX_LENGTH-1000)) // 客户端发送来的包居然说包长度 > 29000 ? 判定为恶意包
@@ -198,7 +202,7 @@ void CSocket::ngx_wait_request_handler_proc_p1(lpngx_connection_t c)
         // 状态和接收位置都复原，这些值都有必要，因为有可能在其他状态比如_PKG_HD_RECVING状态调用这函数
         c->curStat = _PKG_HD_INIT;
         c->precvbuf = c->dataHeadInfo;
-        c->irecvlen = m_iLenMsgHeader;
+        c->irecvlen = m_iLenPkgHeader;
     }
     else
     {
@@ -210,12 +214,15 @@ void CSocket::ngx_wait_request_handler_proc_p1(lpngx_connection_t c)
 
 
         // 1）先填写消息头内容
-        LPSTRUC_MSG_HEADER ptmpMsgHeader = (LPSTRUC_MSG_HEADER)pTmpBuffer;
-        ptmpMsgHeader->pConn = c;
+        LPSTRUC_MSG_HEADER ptmpMsgHeader = (LPSTRUC_MSG_HEADER)pTmpBuffer;  // 消息头指向分配内存的首地址
+        ptmpMsgHeader->pConn = c;                           // 记录连接池中的连接
         ptmpMsgHeader->iCurrsequence = c->iCurrsequence;    // 收到包时的连接池中连接序号记录到信息头中来，以备后续使用
         // 2）再填写包头内容
         pTmpBuffer += m_iLenMsgHeader;                      // 往后跳，跳过消息头，指向包头
-        memcpy(pTmpBuffer, pPkgHeader, m_iLenMsgHeader);    // 直接把收到的包头拷贝进来
+                                                            // pTmpBuffer是char *类型，本身是1个字节， ，+=的话就会跳过m_iLenMsgHeader这么多个字节
+        memcpy(pTmpBuffer, pPkgHeader, m_iLenPkgHeader);    // 直接把收到的包头拷贝进来
+
+        // 注意一个点，代码走到这里，只是接受完了包头，还没有开始接收包体
         if (e_pkgLen == m_iLenPkgHeader)
         {
             // 该报文只有包头无包体【允许一个包只有包头，没有包体】
@@ -226,8 +233,8 @@ void CSocket::ngx_wait_request_handler_proc_p1(lpngx_connection_t c)
         {
             // 开始接收包体
             c->curStat = _PKG_BD_INIT;                      // 单前状态发生改变，包头刚好收完，准备接收包体
-            c->precvbuf = pTmpBuffer + m_iLenMsgHeader;     // pTmpBuffer指向包头，这里 + m_iLenPkgHeader后指向包体位置
-            c->irecvlen = e_pkgLen - m_iLenMsgHeader;       // e_pkgLen是整个包【包体+包头】大小，-m_iLenPkgHeader【包头】 = 包体
+            c->precvbuf = pTmpBuffer + m_iLenPkgHeader;     // pTmpBuffer指向包头，这里 + m_iLenPkgHeader后指向包体位置
+            c->irecvlen = e_pkgLen - m_iLenPkgHeader;       // e_pkgLen是整个包【包体+包头】大小 - m_iLenPkgHeader【包头】 = 包体
         }
 
     }
@@ -241,14 +248,17 @@ void CSocket::ngx_wait_request_handler_proc_plast(lpngx_connection_t c)
 {
     // 把这段内存放到消息队列中来
     inMsgRecvQueue(c->pnewMemPointer);
+    // 注意这里，我们把这段new出来的内存放到消息队列中，那么后续这段内存就不归连接池管理了
+    // 也就是说，这段内存的释放就不能再连接池中进行释放了，而应该放到具体的业务函数中进行处理
+    // 所以下面才会把ifnewrecvMem内存释放标记设置为false，指向内存的指针也设置为空NULL
     // ---------这里可能考虑触发业务逻辑，怎么触发业务逻辑，后续实现
 
     c->ifnewrecvMem     = false;            // 内存不再需要释放，因为你收完整了包，这个包被上面调用inMsgRecvQueue()移入消息队列，那么释放内存就属于业务逻辑去干， 不需要回收连接到连接池中做了
     c->pnewMemPointer   = NULL;
     c->curStat          = _PKG_HD_INIT;     // 收包状态机的状态恢复为原始态，为收下一个包做准备
     c->precvbuf         = c->dataHeadInfo;  // 设置好收包的位置
-    c->irecvlen         = m_iLenMsgHeader;  // 设置好要接收的数据的大小
-    return；
+    c->irecvlen         = m_iLenPkgHeader;  // 设置好要接收的数据的大小
+    return;
 }
 
 // 当收到一个完整包之后，将完整包移入消息队列，这个包在服务器端应该是 消息头+包头+包体 格式
