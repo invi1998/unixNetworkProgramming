@@ -30,6 +30,9 @@ private:
 
         // 构造函数
         ThreadItem(CThreadPool *pthis):_pThis(pthis),ifrunning(false){}
+        // 注意这里：pthis是一个线程池指针，然后在初始化列表里将这个线程池指针赋予了_pThis,
+        // 这样写有什么好处呢，因为这里ThreadItem代表一个线程，我们把线程池类的指针通过这个参数pthis传递给线程类ThreadItem的成员变量，用这个成员变量来保存线程池对象的指针，
+        // 那么我日后对于每一个创建成功的线程，就可以通过线程对象的这个_pThis访问到这个线程池管理里对象（访问到线程池）
 
         // 析构函数
         ~ThreadItem(){}

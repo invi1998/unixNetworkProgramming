@@ -98,7 +98,7 @@ void ngx_master_process_cycle()
     for ( ;; ) 
     {
 
-    //    usleep(100000);
+        //    usleep(100000);
         //ngx_log_error_core(0,0,"haha--这是父进程，pid为%P",ngx_pid);
 
         //a)根据给定的参数设置新的mask 并 阻塞当前进程【因为是个空集，所以不阻塞任何信号】
@@ -110,7 +110,7 @@ void ngx_master_process_cycle()
         sigsuspend(&set); //阻塞在这里，等待一个信号，此时进程是挂起的，不占用cpu时间，只有收到信号才会被唤醒（返回）；
                          //此时master进程完全靠信号驱动干活    
 
-//        printf("执行到sigsuspend()下边来了\n");
+        //        printf("执行到sigsuspend()下边来了\n");
         
         //printf("master进程休息1秒\n");      
         //ngx_log_stderr(0,"haha--这是父进程，pid为%P",ngx_pid); 
@@ -213,6 +213,16 @@ static void ngx_worker_process_init(int inum)
     {
         ngx_log_error_core(NGX_LOG_ALERT,errno,"ngx_worker_process_init()中sigprocmask()失败!");
     }
+
+    // 线程池代码，率先创建，至少要比和socket相关的内容优先
+    CConfig *p_config = CConfig::GetInstance();
+    int tmpthreadnums = p_config->GetIntDefault("ProcMsgRecvWorkThreadCount",5); //处理接收到的消息的线程池中线程数量
+    if(g_threadpool.Create(tmpthreadnums) == false)  //创建线程池中线程
+    {
+        //内存没释放，但是简单粗暴退出；
+        exit(-2);
+    }
+    sleep(1); //再休息1秒；
 
     //如下这些代码参照官方nginx里的ngx_event_process_init()函数中的代码
     g_socket.ngx_epoll_init();           //初始化epoll相关内容，同时 往监听socket上增加监听事件，从而开始让监听端口履行其职责

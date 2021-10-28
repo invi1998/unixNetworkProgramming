@@ -27,6 +27,7 @@ int     g_daemonized=0;         //守护进程标记，标记是否启用了守�
 
 // socket相关
 CSocket g_socket;               // socket全局对象
+CThreadPool  g_threadpool;      //线程池全局对象
 
 //和进程本身有关的全局量
 pid_t   ngx_pid;                //当前进程的pid

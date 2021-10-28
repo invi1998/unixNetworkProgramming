@@ -296,6 +296,9 @@ char *CSocket::outMsgRecvQueue()
     }
     char *sTmpMsgBuf = m_MsgRecvQueue.front(); //返回第一个元素但不检查元素存在与否
     m_MsgRecvQueue.pop_front();                //移除第一个元素但不返回	
+    // 注意这里pop_front()，这个pop_front只是把这个指针从list容器中移出来，可不是把这个元素所对应的内存给进行释放，对于这里块的理解千万不能糊涂
+    // 因为我们在收数据包的时候，会new一个内存，然后把这个内存的指针放到这个list中，这个指针并没有因为pop_front而把实际的内存释放掉
+    // 所以下面直接把这块内存作为返回值return出去
     --m_iRecvMsgQueueCount;                    //收消息队列数字-1
     return sTmpMsgBuf;                         
 }
