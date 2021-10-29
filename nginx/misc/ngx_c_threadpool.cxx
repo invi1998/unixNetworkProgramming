@@ -27,7 +27,26 @@ CThreadPool::CThreadPool()
 CThreadPool::~CThreadPool()
 {
     // 资源释放统计放在StopAll()中进行
+    clearMsgRecvQueue();
 }
+
+// 各种清理函数-------------------------
+// 清理接收消息队列，注意这个函数的写法
+void CThreadPool::clearMsgRecvQueue()
+{
+    char * sTmpMempoint;
+    CMemory *p_memory = CMemory::GetInstance();
+
+    // 尾声阶段，需要互斥吗？该退的都退出了，该停止的也都停止了，应该不需要退出了
+    while (!m_MsgRecvQueue.empty())
+    {
+        sTmpMempoint = m_MsgRecvQueue.front();
+        m_MsgRecvQueue.pop_front(); 
+		p_memory->FreeMemory(sTmpMempoint);
+    }
+    
+}
+
 
 // 创建线程池中的线程， 要手动调用，不要在构造函数里调用
 // 返回值：所有的线程都创建成功则返回true，出现错误则返回false
@@ -120,7 +139,8 @@ void * CThreadPool::ThreadFunc(void * threadData)
         // 虚假唤醒
         // 条件变量/wait()/notify_one()/notify_all()，其实跟这里的pthread_cond_wait()/pthread_cond_signal()/pthread_cond_broadcast()非常类似
         // pthread_cond_wait()函数，如果只有一条消息，唤醒了两个线程干活，那么其中有一个线程拿不到消息，那如果不用while写，就会出问题，所以被惊醒后必须再次调用while拿消息，拿到消息才能走下来
-        while ((jobbuf = g_socket.outMsgRecvQueue()) == NULL && m_shutdown == false)
+        // while ((jobbuf = g_socket.outMsgRecvQueue()) == NULL && m_shutdown == false)
+        while ((pThreadPoolObj->m_MsgRecvQueue.size() == 0) && m_shutdown == false)
         {
             // 如果这个pthread_cond_wait被唤醒【被唤醒后程序执行流程往下走的前提是拿到了锁--官方：pthread_cond_wait()返回时，互斥量再次被锁住】
             // 那么会立即再次执行g_socket.outMsgRecvQueue()。如果拿到了一个NULL，则继续在这里wait()着
@@ -164,31 +184,42 @@ void * CThreadPool::ThreadFunc(void * threadData)
         // if(!m_shutdown)  // 如果这个条件成立，表示肯定是拿到了消息队列中的数据，要去干活了，就说明正在运行的线程数量要+1
         // ++m_iRunningThreadNum;   // 因为这里是互斥的，所以这个+是OK的
 
-        err = pthread_mutex_unlock(&m_pthreadMutex);    // 先解锁mutex
-        if (err!=0)
-        {
-            ngx_log_stderr(err,"CThreadPool::ThreadFunc()pthread_cond_wait()失败，返回的错误码为%d!",err);//有问题，要及时报告
-        }
+        // err = pthread_mutex_unlock(&m_pthreadMutex);    // 先解锁mutex
+        // if (err!=0)
+        // {
+        //     ngx_log_stderr(err,"CThreadPool::ThreadFunc()pthread_cond_wait()失败，返回的错误码为%d!",err);//有问题，要及时报告
+        // }
 
         // 先判断线程退出这个条件
         if (m_shutdown)
         {
-            if (jobbuf != NULL)
-            {
-                // 这个条件在这里应该不成立，不过加上也无所谓【后来又感觉也可能会成立尤其是当要退出的时候】
-                p_memory->FreeMemory(jobbuf);
-            }
-            break;
+            // if (jobbuf != NULL)
+            // {
+            //     // 这个条件在这里应该不成立，不过加上也无所谓【后来又感觉也可能会成立尤其是当要退出的时候】
+            //     p_memory->FreeMemory(jobbuf);
+            // }
+            // break;
+
+            pthread_mutex_unlock(&m_pthreadMutex);      // 解锁互斥量
         }
         
-        // 能走到这里的，就是表示有数据可以处理的
-        ++pThreadPoolObj->m_iRunningThreadNum;  // 原子+1， 这比互斥量要快很多
+        // 能走到这里的，就是表示有数据可以处理的 【消息队列中必然有消息】,注意，目前还是互斥着
+        char *jobbuf = pThreadPoolObj->m_MsgRecvQueue.front();  // 返回第一个元素但是不检查元素是否纯在
+        pThreadPoolObj->m_MsgRecvQueue.pop_front();             // 移除第一个元素但不返回
+        --pThreadPoolObj->m_iRecvMsgQueueCount;                 // 收消息队列数字-1
 
-        // g_socket.threadRecvProcFunc(jobbuf); // 处理消息队列中来的消息
+        // 可以解锁互斥量了
+        err = pthread_mutex_unlock(&m_pthreadMutex);
+        if (err != 0) ngx_log_stderr(err,"CThreadPool::ThreadFunc()pthread_cond_wait()失败，返回的错误码为%d!",err);//有问题，要及时报告
 
-        ngx_log_stderr(0,"执行开始---begin,tid=%ui!",tid);
-        sleep(5); //临时测试代码
-        ngx_log_stderr(0,"执行结束---end,tid=%ui!",tid);
+        // 能走到这里的，就是有消息可以处理，开始处理
+        ++pThreadPoolObj->m_iRunningThreadNum;  // 原子+1， 这比互斥量要快很多【记录正在干活的线程数量增加1】
+
+        g_socket.threadRecvProcFunc(jobbuf); // 处理消息队列中来的消息
+
+        // ngx_log_stderr(0,"执行开始---begin,tid=%ui!",tid);
+        // sleep(5); //临时测试代码
+        // ngx_log_stderr(0,"执行结束---end,tid=%ui!",tid);
 
         p_memory->FreeMemory(jobbuf);           // 释放消息内存
         --pThreadPoolObj->m_iRunningThreadNum;  // 原子-1
@@ -321,3 +352,31 @@ void CThreadPool::Call(int irmqc)
 
 //唤醒丢失问题，sem_t sem_write;
 //参考信号量解决方案：https://blog.csdn.net/yusiguyuan/article/details/20215591  linux多线程编程--信号量和条件变量 唤醒丢失事件
+
+
+// ------------------------------------------------------------------
+// 收到一个完整的消息后，入消息队列，并触发线程池中的线程来处理该消息
+void CThreadPool::inMsgRecvQueueAndSignal(char *buf)
+{
+    // 互斥
+    int err = pthread_mutex_lock(&m_pthreadMutex);
+    if (err!=0)
+    {
+        ngx_log_stderr(err,"CThreadPool::inMsgRecvQueueAndSignal()pthread_mutex_lock()失败，返回的错误码为%d!",err);
+    }
+
+    m_MsgRecvQueue.push_back(buf);          // 入消息队列
+    ++m_iRecvMsgQueueCount;                 // 收消息队列数字+1，个人认为使用功能变量更方便一点，比m_MsgRecvQueue.size()高效
+
+    // 取消互斥
+    err = pthread_mutex_unlock();
+    if (err!=0)
+    {
+        ngx_log_stderr(err,"CThreadPool::inMsgRecvQueueAndSignal()pthread_mutex_unlock()失败，返回的错误码为%d!",err);
+    }
+
+    // 可以激发一个线程来干活了
+    Call();
+    return;
+    
+}

@@ -16,9 +16,12 @@ public:
     bool Create(int threadNum);                 // 创建该线程池中所有的线程
     void StopAll();                             // 使线程池中所有的线程退出
     void Call(int irmqc);                       // 来任务了，调一个线程池中的线程下来干活
+    void inMsgRecvQueueAndSignal(char *buf);    // 收到一个完整消息后，入消息队列，并触发线程池中的线程来处理该消息
 
 private:
     static void * ThreadFunc(void *threadData); // 新线程的线程回调函数
+    void clearMsgRecvQueue();                   // 清理接受消息队列
+    // char *outMsgRecvQueue();                    // 将一个消息出消息队列，不需要直接在ThreadFunc()中处理
 
 private:
     // 定义一个线程池中的 线程 的结构，以后可以做一些统计之类的功能扩展，所以引入这么一结构 来代表线程，更方便扩展
@@ -52,6 +55,10 @@ private:
     //time_t                     m_iCurrTime;           //当前时间
 
     std::vector<ThreadItem *>   m_threadVector;         // 线程 容器，容器里就是各个线程
+
+    // 接受消息队列相关
+    std::list<char *>           m_MsgRecvQueue;         // 接收数据消息队列
+    int                         m_iRecvMsgQueueCount;   // 接收消息队列大小
 
 };
 

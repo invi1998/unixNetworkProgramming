@@ -3,10 +3,11 @@
 
 ifeq ($(DEBUG),true)
 #-g是生成调试信息。GNU调试器可以利用该信息
-CC = g++ -g
+# 同时为了使得编译器支持c++11新特性，需要在编译指令上添加-std=c++11
+CC = g++ -std=c++11 -g
 VERSION = debug
 else
-CC = g++
+CC = g++ -std=c++11
 VERSION = release
 endif
 
@@ -99,7 +100,8 @@ $(DEP_DIR)/%.d:%.cxx
 	echo -n $(LINK_OBJ_DIR)/ > $@
 #	gcc -MM $^ | sed 's/^/$(LINK_OBJ_DIR)&/g' > $@
 #  >>表示追加
-	gcc -I$(INCLUDE_PATH) -MM $^ >> $@
+# gcc -I$(INCLUDE_PATH) -MM $^ >> $@
+	$(CC) -I$(INCLUDE_PATH) -MM $^ >> $@
 
 #上行处理后，.d文件中内容应该就如：/mnt/hgfs/linux/nginx/app/link_obj/nginx.o: nginx.c ngx_func.h ../signal/ngx_signal.h
 
