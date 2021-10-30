@@ -146,7 +146,27 @@ void CLogicSocket::threadRecvProcFunc(char *pMsgBuf)
 //处理各种业务逻辑
 bool CLogicSocket::_HandleRegister(lpngx_connection_t pConn,LPSTRUC_MSG_HEADER pMsgHeader,char *pPkgBody,unsigned short iBodyLength)
 {
-    ngx_log_stderr(0,"执行了CLogicSocket::_HandleRegister()!");
+    // ngx_log_stderr(0,"执行了CLogicSocket::_HandleRegister()!");
+
+    // （1）首先判断包体的合法性
+    if (pPkgBody == NULL)       // 具体看客户端服务器约定，如果约定这个命令【msgCode】必须带包体，那么如果不带包体，就认为是恶意包，直接不处理
+    {
+        return false;
+    }
+
+    int iRecvLen = sizeof(STRUCT_REGISTER);
+    if (iRecvLen != iBodyLength)    // 发送过来的数据结构大小不对，认为是恶意包，直接不处理
+    {
+        return false;
+    }
+
+    // （2）对于同一个用户，可能同时发送过来多个请求，造成多个线程同时为该用户服务，比如以网游为例，用户要在商店中买A物品，又买B物品，而用户的钱 只够买A或者B，不够同时买A和B呢？
+    // 那如果用户发送购买命令过来买了一次A，又买了一次B，如果是两个线程来执行同一个用户的这两次不同的购买命令，很可能造成这个用户购买成功了 A，又购买成功了 B
+    // 所以为了稳妥起见，针对某个用户的命令，我们一般都要进行互斥，需要增加临界的变量在ngx_connection_s结构中
+    // 没写完，先保存
+    Clock lock(&pConn->)
+    
+
     return true;
 }
 bool CLogicSocket::_HandleLogIn(lpngx_connection_t pConn,LPSTRUC_MSG_HEADER pMsgHeader,char *pPkgBody,unsigned short iBodyLength)
