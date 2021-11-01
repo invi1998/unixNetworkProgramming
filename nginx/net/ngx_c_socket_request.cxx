@@ -25,79 +25,79 @@
 #include "ngx_c_lockmutex.h"  //自动释放互斥量的一个类
 
 //来数据时候的处理，当连接上有数据来的时候，本函数会被ngx_epoll_process_events()所调用  ,官方的类似函数为ngx_http_wait_request_handler();
-void CSocket::ngx_wait_request_handler(lpngx_connection_t c)
+void CSocket::ngx_wait_request_handler(lpngx_connection_t pConn)
 {
-    // 收包，注意这里使用的第二个和第三个参数，我这里用的始终都是这俩个参数，所以必须要保证 c->precvbuf 指向正确的收包位置，保证c->irecvlen指向正确的收包宽度
-    ssize_t reco = recvproc(c, c->precvbuf, c->irecvlen);
+    // 收包，注意这里使用的第二个和第三个参数，我这里用的始终都是这俩个参数，所以必须要保证 pConn->precvbuf 指向正确的收包位置，保证c->irecvlen指向正确的收包宽度
+    ssize_t reco = recvproc(pConn, pConn->precvbuf, pConn->irecvlen);
     if (reco <= 0)
     {
         return;     // 该处理的上面这个recvproc()函数里处理过了，这里<=直接退出
     }
 
     // 走到这里，说明成功收到了一些字节（>0 ）,就要开始判断收到多少数据了
-    if (c->curStat == _PKG_HD_INIT)         // 连接建立起来肯定是这个状态，因为在ngx_get_connection()中已经把curStat成员赋值为_PKG_HD_INIT了
+    if (pConn->curStat == _PKG_HD_INIT)         // 连接建立起来肯定是这个状态，因为在ngx_get_connection()中已经把curStat成员赋值为_PKG_HD_INIT了
     {
         if (reco == m_iLenPkgHeader)        // 正好接收到完整包头，这里拆解包头
         {
-            ngx_wait_request_handler_proc_p1(c);    // 调用专门针对包头处理完整的函数进行处理
+            ngx_wait_request_handler_proc_p1(pConn);    // 调用专门针对包头处理完整的函数进行处理
         }
         else
         {
             // 收到的包头不完整--我们不可能预料每个包的长度，也不能预料各种拆包/粘包的情况，所以收不到完整的包头【也算是缺包】是有可能的
-            c->curStat = _PKG_HD_RECVING;           // 接收包头中，包头不完整，继续接收包头
-            c->precvbuf = c->precvbuf + reco;       // 注意接收后续包的内存往后走
-            c->irecvlen = c->irecvlen - reco;       // 要接收的内容当然也要减少，以确保只收到完整的包头先
+            pConn->curStat = _PKG_HD_RECVING;           // 接收包头中，包头不完整，继续接收包头
+            pConn->precvbuf = pConn->precvbuf + reco;       // 注意接收后续包的内存往后走
+            pConn->irecvlen = pConn->irecvlen - reco;       // 要接收的内容当然也要减少，以确保只收到完整的包头先
 
         }
         
     }
-    else if (c->curStat == _PKG_HD_RECVING)         // 接收包头中，包头不完整，继续接收中，这个条件才会成立
+    else if (pConn->curStat == _PKG_HD_RECVING)         // 接收包头中，包头不完整，继续接收中，这个条件才会成立
     {
-        if (c->irecvlen == reco) // 要求收到的宽度和我们实际收到的宽度相等
+        if (pConn->irecvlen == reco) // 要求收到的宽度和我们实际收到的宽度相等
         {
             // 包头收完整了
-            ngx_wait_request_handler_proc_p1(c);    // 调用专门针对包头处理的函数
+            ngx_wait_request_handler_proc_p1(pConn);    // 调用专门针对包头处理的函数
         }
         else
         {
             // 包头还没有收完整，继续收包头
-            // c->curStat = _PKG_HD_RECVING;        // 这里没有必要
-            c->precvbuf = c->precvbuf + reco;       // 注意收后续包的内存往后走
-            c->irecvlen = c->irecvlen - reco;       // 要收的内容自然要减少，以确保只收到完整的包头先
+            // pConn->curStat = _PKG_HD_RECVING;        // 这里没有必要
+            pConn->precvbuf = pConn->precvbuf + reco;       // 注意收后续包的内存往后走
+            pConn->irecvlen = pConn->irecvlen - reco;       // 要收的内容自然要减少，以确保只收到完整的包头先
 
         }
         
     }
-    else if (c->curStat == _PKG_BD_INIT)
+    else if (pConn->curStat == _PKG_BD_INIT)
     {
         // 包头刚好收完，准备收包体
-        if (reco == c->irecvlen)
+        if (reco == pConn->irecvlen)
         {
             // 收到的宽度等于要接收的宽度，包体也收完整了
-            ngx_wait_request_handler_proc_plast(c);
+            ngx_wait_request_handler_proc_plast(pConn);
         }
         else
         {
             // 收到的宽度小于要收的宽度
-            c->curStat = _PKG_BD_RECVING;
-            c->precvbuf = c->precvbuf + reco;
-            c->irecvlen = c->irecvlen - reco;
+            pConn->curStat = _PKG_BD_RECVING;
+            pConn->precvbuf = pConn->precvbuf + reco;
+            pConn->irecvlen = pConn->irecvlen - reco;
         }
         
     }
-    else if (c->curStat == _PKG_BD_RECVING)
+    else if (pConn->curStat == _PKG_BD_RECVING)
     {
         // 接收包体中，包体不完整，继续接收中
-        if (c->irecvlen == reco)
+        if (pConn->irecvlen == reco)
         {
             // 包体接收完整了
-            ngx_wait_request_handler_proc_plast(c);
+            ngx_wait_request_handler_proc_plast(pConn);
         }
         else
         {
             // 包体没接收完整，继续接收
-            c->precvbuf = c->precvbuf + reco;
-			c->irecvlen = c->irecvlen - reco;
+            pConn->precvbuf = pConn->precvbuf + reco;
+			pConn->irecvlen = pConn->irecvlen - reco;
         }
         
     }
@@ -111,16 +111,16 @@ void CSocket::ngx_wait_request_handler(lpngx_connection_t c)
 // 参数buflen：要接收的数据大小
 // 返回值：返回-1   则是有问题并且已经在这里把问题处理完毕了，本函数的调用者一般是可以直接return不做处理
         // 返回>0   则是表示实际收到的字节数
-ssize_t CSocket::recvproc(lpngx_connection_t c, char *buff, ssize_t buflen)     // ssize_t是有符号整形，在32位机器上等同于int，在64位机器上等同于long int,  size_t就是无符号型的ssize_t
+ssize_t CSocket::recvproc(lpngx_connection_t pConn, char *buff, ssize_t buflen)     // ssize_t是有符号整形，在32位机器上等同于int，在64位机器上等同于long int,  size_t就是无符号型的ssize_t
 {
     ssize_t n;
 
-    n= recv(c->fd, buff, buflen, 0);    // recv()系统函数。最后一个参数flag，一般为0
+    n= recv(pConn->fd, buff, buflen, 0);    // recv()系统函数。最后一个参数flag，一般为0
     if (n == 0)
     {
         // 客户端关闭【应该是正常完成了4次挥手】，这里就直接回收连接，关闭socket
         // ngx_log_stderr(0,"连接被客户端正常关闭[4路挥手关闭]！");
-        ngx_close_connection(c);
+        ngx_close_connection(pConn);
         return -1;
     }
 
@@ -165,7 +165,7 @@ ssize_t CSocket::recvproc(lpngx_connection_t c, char *buff, ssize_t buflen)     
         }
         
         //ngx_log_stderr(0,"连接被客户端 非 正常关闭！");
-        ngx_close_connection(c);
+        ngx_close_connection(pConn);
         return -1;
     }
     
@@ -175,12 +175,12 @@ ssize_t CSocket::recvproc(lpngx_connection_t c, char *buff, ssize_t buflen)     
 }
 
 // 包头收完整后的处理，包处理阶段1
-void CSocket::ngx_wait_request_handler_proc_p1(lpngx_connection_t c)
+void CSocket::ngx_wait_request_handler_proc_p1(lpngx_connection_t pConn)
 {
     CMemory *p_memory = CMemory::GetInstance();
 
     LPCOMM_PKG_HEADER pPkgHeader;
-    pPkgHeader = (LPCOMM_PKG_HEADER)c->dataHeadInfo;    // 正好收到包头时，包头信息肯定在dataHeadInfo里
+    pPkgHeader = (LPCOMM_PKG_HEADER)pConn->dataHeadInfo;    // 正好收到包头时，包头信息肯定在dataHeadInfo里
 
     unsigned short e_pkgLen;
     e_pkgLen = ntohs(pPkgHeader->pkgLen);
@@ -193,32 +193,32 @@ void CSocket::ngx_wait_request_handler_proc_p1(lpngx_connection_t c)
         // 伪装包、或者包错误，否者整个包长怎么可能比包头还小？（整个包长是包头+包体,就算包体为0字节，那么至少e_pkgLen == m_iLenPkgHeader）
         // 报文总长度 < 包头长度，认定非法用户，废包
         // 状态和接收位置都复原，这些字都有必要，因为有可能在其他状态比如_PKG_HD_RECVING状态调用这个函数
-        c->curStat = _PKG_HD_INIT;
-        c->precvbuf = c->dataHeadInfo;
-        c->irecvlen = m_iLenPkgHeader;
+        pConn->curStat = _PKG_HD_INIT;
+        pConn->precvbuf = pConn->dataHeadInfo;
+        pConn->irecvlen = m_iLenPkgHeader;
 
     }
     else if (e_pkgLen > (_PKG_MAX_LENGTH-1000)) // 客户端发送来的包居然说包长度 > 29000 ? 判定为恶意包
     {
         // 恶意包，太大，认定为非法用户，废包【包头中说这个包总长度这么大，这不行】
         // 状态和接收位置都复原，这些值都有必要，因为有可能在其他状态比如_PKG_HD_RECVING状态调用这函数
-        c->curStat = _PKG_HD_INIT;
-        c->precvbuf = c->dataHeadInfo;
-        c->irecvlen = m_iLenPkgHeader;
+        pConn->curStat = _PKG_HD_INIT;
+        pConn->precvbuf = pConn->dataHeadInfo;
+        pConn->irecvlen = m_iLenPkgHeader;
     }
     else
     {
         // 合法的包头，继续处理
         // 现在要分配内存，开始接收包体，因为包体总长度并不是固定的，所以内存肯定要new出来
         char *pTmpBuffer = (char *)p_memory->AllocMemory(m_iLenMsgHeader + e_pkgLen, false);    // 分配内存【长度是 消息头长度 + 包体长度】最后参数先给false，表示内存不需要memset
-        c->ifnewrecvMem = true;         // 标记我们new了内存，将来在ngx_free_connextion()要进行内存回收
-        c->pnewMemPointer = pTmpBuffer;     // 内存开始指针
+        pConn->ifnewrecvMem = true;         // 标记我们new了内存，将来在ngx_free_connextion()要进行内存回收
+        pConn->pnewMemPointer = pTmpBuffer;     // 内存开始指针
 
 
         // 1）先填写消息头内容
         LPSTRUC_MSG_HEADER ptmpMsgHeader = (LPSTRUC_MSG_HEADER)pTmpBuffer;  // 消息头指向分配内存的首地址
-        ptmpMsgHeader->pConn = c;                           // 记录连接池中的连接
-        ptmpMsgHeader->iCurrsequence = c->iCurrsequence;    // 收到包时的连接池中连接序号记录到信息头中来，以备后续使用
+        ptmpMsgHeader->pConn = pConn;                           // 记录连接池中的连接
+        ptmpMsgHeader->iCurrsequence = pConn->iCurrsequence;    // 收到包时的连接池中连接序号记录到信息头中来，以备后续使用
         // 2）再填写包头内容
         pTmpBuffer += m_iLenMsgHeader;                      // 往后跳，跳过消息头，指向包头
                                                             // pTmpBuffer是char *类型，本身是1个字节， ，+=的话就会跳过m_iLenMsgHeader这么多个字节
@@ -229,14 +229,14 @@ void CSocket::ngx_wait_request_handler_proc_p1(lpngx_connection_t c)
         {
             // 该报文只有包头无包体【允许一个包只有包头，没有包体】
             // 这相当于收完整了，则直接接入消息队列带后续业务逻辑线程去处理
-            ngx_wait_request_handler_proc_plast(c);
+            ngx_wait_request_handler_proc_plast(pConn);
         }
         else
         {
             // 开始接收包体
-            c->curStat = _PKG_BD_INIT;                      // 单前状态发生改变，包头刚好收完，准备接收包体
-            c->precvbuf = pTmpBuffer + m_iLenPkgHeader;     // pTmpBuffer指向包头，这里 + m_iLenPkgHeader后指向包体位置
-            c->irecvlen = e_pkgLen - m_iLenPkgHeader;       // e_pkgLen是整个包【包体+包头】大小 - m_iLenPkgHeader【包头】 = 包体
+            pConn->curStat = _PKG_BD_INIT;                      // 单前状态发生改变，包头刚好收完，准备接收包体
+            pConn->precvbuf = pTmpBuffer + m_iLenPkgHeader;     // pTmpBuffer指向包头，这里 + m_iLenPkgHeader后指向包体位置
+            pConn->irecvlen = e_pkgLen - m_iLenPkgHeader;       // e_pkgLen是整个包【包体+包头】大小 - m_iLenPkgHeader【包头】 = 包体
         }
 
     }
@@ -246,11 +246,11 @@ void CSocket::ngx_wait_request_handler_proc_p1(lpngx_connection_t c)
 }
 
 // 收到一个完整的包后的处理函数 【plast表示最后阶段】
-void CSocket::ngx_wait_request_handler_proc_plast(lpngx_connection_t c)
+void CSocket::ngx_wait_request_handler_proc_plast(lpngx_connection_t pConn)
 {
     // 把这段内存放到消息队列中来
     // int irmqc = 0;    // 消息队列中当前消息数量
-    // inMsgRecvQueue(c->pnewMemPointer, irmqc);
+    // inMsgRecvQueue(pConn->pnewMemPointer, irmqc);
     // 注意这里，我们把这段new出来的内存放到消息队列中，那么后续这段内存就不归连接池管理了
     // 也就是说，这段内存的释放就不能再连接池中进行释放了，而应该放到具体的业务函数中进行处理
     // 所以下面才会把ifnewrecvMem内存释放标记设置为false，指向内存的指针也设置为空NULL
@@ -258,13 +258,13 @@ void CSocket::ngx_wait_request_handler_proc_plast(lpngx_connection_t c)
 
     // 激发线程池中的某个线程来处理业务逻辑
     // g_threadPool.Call(irmqc);
-    g_threadpool.inMsgRecvQueueAndSignal(c->pnewMemPointer);    // 入消息队列并触发线程处理消息
+    g_threadpool.inMsgRecvQueueAndSignal(pConn->pnewMemPointer);    // 入消息队列并触发线程处理消息
 
-    c->ifnewrecvMem     = false;            // 内存不再需要释放，因为你收完整了包，这个包被上面调用inMsgRecvQueue()移入消息队列，那么释放内存就属于业务逻辑去干， 不需要回收连接到连接池中做了
-    c->pnewMemPointer   = NULL;
-    c->curStat          = _PKG_HD_INIT;     // 收包状态机的状态恢复为原始态，为收下一个包做准备
-    c->precvbuf         = c->dataHeadInfo;  // 设置好收包的位置
-    c->irecvlen         = m_iLenPkgHeader;  // 设置好要接收的数据的大小
+    pConn->ifnewrecvMem     = false;            // 内存不再需要释放，因为你收完整了包，这个包被上面调用inMsgRecvQueue()移入消息队列，那么释放内存就属于业务逻辑去干， 不需要回收连接到连接池中做了
+    pConn->pnewMemPointer   = NULL;
+    pConn->curStat          = _PKG_HD_INIT;     // 收包状态机的状态恢复为原始态，为收下一个包做准备
+    pConn->precvbuf         = pConn->dataHeadInfo;  // 设置好收包的位置
+    pConn->irecvlen         = m_iLenPkgHeader;  // 设置好要接收的数据的大小
     return;
 }
 

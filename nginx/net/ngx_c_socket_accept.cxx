@@ -146,7 +146,7 @@ void CSocket::ngx_event_accept(lpngx_connection_t oldc)
         }
 
         newc->listening = oldc->listening;                      // 连接对象，和监听对象关联，方便通过连接对象找监听对象【关联到监听端口】
-        newc->w_ready = 1;                                      // 标记可以写，新连接写事件肯定是ready的，【从连接池拿出一个连接时这个连接的所有成员都是0】
+        // newc->w_ready = 1;                                      // 标记可以写，新连接写事件肯定是ready的，【从连接池拿出一个连接时这个连接的所有成员都是0】
         newc->rhandler = &CSocket::ngx_wait_request_handler;    // 设置数据来的时候的读处理函数。其实官方nginx中是ngx_http_wait_request_handler()
 
         // 客户端应该主动发送第一次的数据，这里读事件加入epoll监控
@@ -156,7 +156,13 @@ void CSocket::ngx_event_accept(lpngx_connection_t oldc)
         // EPOLL_CTL_ADD,       事件类型【增加，还有删除/修改】
         // newc                 连接池中的连接
         // if (ngx_epoll_add_event(s, 1, 0, EPOLLET, EPOLL_CTL_ADD, newc) == -1)    // ET
-        if (ngx_epoll_add_event(s, 1, 0, 0, EPOLL_CTL_ADD, newc) == -1) // LT 本项目使用LT模式
+        // if (ngx_epoll_add_event(s, 1, 0, 0, EPOLL_CTL_ADD, newc) == -1) // LT 本项目使用LT模式
+        // s,                   socket句柄
+        // EPOLL_CTL_ADD,       事件类型，这里是增加
+        // EPOLLIN|EPOLLRDHUP,  标志，这里代表要增加的标志，EPOLLIN:可读， EPOLLRDHUP: tcp连接的远端关闭或者半关闭
+        // 0,                   对于事件类型为增加的，不需要这个参数
+        // newc                 连接池中的连接
+        if (ngx_epoll_oper_event(s, EPOLL_CTL_ADD, EPOLLIN|EPOLLRDHUP,0,newc) == -1)
         {
             // 增加事件失败。失败日志在ngx_epoll_add_event中写过了
             ngx_close_connection(newc);

@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "ngx_func.h": "c",
-        "vector": "cpp"
+        "vector": "cpp",
+        "list": "cpp"
     }
 }
