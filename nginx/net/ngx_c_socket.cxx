@@ -430,7 +430,7 @@ int CSocket::ngx_epoll_init()
         // EPOLLIN|EPOLLRDHUP,      标志，这里代表要增加的标志，EPOLLIN:可读，EPOLLRDHUP:TCP连接的远端关闭或者半关闭
         // 0,                       对于事件类型为增加的，不需要这个参数
         // p_Conn                   连接池中的连接
-        if(ngx_epoll_add_event((*pos)->fd, EPOLL_CTL_ADD, EPOLLIN|EPOLLRDHUP, 0, p_Conn) == -1)
+        if(ngx_epoll_oper_event((*pos)->fd, EPOLL_CTL_ADD, EPOLLIN|EPOLLRDHUP, 0, p_Conn) == -1)
         {
             exit(2); //有问题，直接退出，日志 已经写过了
         }
@@ -688,7 +688,7 @@ int CSocket::ngx_epoll_process_events(int timer)
 // --------------------------------------------------------------------------------------------------
 // 处理发送消息队列的线程原来准备施工用线程进行处理,但是线程也有线程的问题,如果连接池中的连接被主流程回收了,很可能这里执行的代码在执行过程中所操纵的连接时 已经被回收的,这会导致程序不稳定
 // 为了简化问题,这里就不用线程了
-void* CSocket::ServerRecyConnectionThread(void* threadData)
+void* CSocket::ServerSendConnectionThread(void* threadData)
 {
     ThreadItem *pThread = static_cast<ThreadItem*>(threadData);
     CSocket *pSocketObj = pThread->_pThis;

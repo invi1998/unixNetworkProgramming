@@ -183,7 +183,7 @@ static void ngx_worker_process_cycle(int inum,const char *pprocname)
         //先sleep一下 以后扩充.......
         //printf("worker进程休息1秒");       
         //fflush(stdout); //刷新标准输出缓冲区，把输出缓冲区里的东西打印到标准输出设备上，则printf里的东西会立即输出；
-        sleep(1); //休息1秒       
+        // sleep(1); //休息1秒       
         //usleep(100000);
         //ngx_log_error_core(0,0,"good--这是子进程，编号为%d,pid为%P！",inum,ngx_pid);
         //printf("1212");
@@ -199,7 +199,13 @@ static void ngx_worker_process_cycle(int inum,const char *pprocname)
         //ngx_log_stderr(0,"good--这是子进程，编号为%d,pid为%P",inum,ngx_pid); 
         //ngx_log_error_core(0,0,"good--这是子进程，编号为%d,pid为%P",inum,ngx_pid);
 
+        ngx_process_events_and_timers();
+
     } //end for(;;)
+
+    // 如果从这个循环中跳出来
+    g_threadpool.StopAll();         // 考虑在这里停止线程池
+    g_socket.Shutdown_subproc();    // socket需要释放的东西考虑进行释放
     return;
 }
 

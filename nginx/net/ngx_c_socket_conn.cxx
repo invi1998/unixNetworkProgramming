@@ -312,7 +312,7 @@ lblRRTD:
                 err = pthread_mutex_unlock(&pSocketObj->m_recyconnqueueMutex);
                 if(err != 0)  ngx_log_stderr(err,"CSocket::ServerRecyConnectionThread()pthread_mutex_unlock2()失败，返回的错误码为%d!",err);
             }
-            break;
+            break;  // 因为整个程序要退出了，所以这里直接break
             
         }
         
