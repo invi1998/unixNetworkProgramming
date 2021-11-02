@@ -46,8 +46,10 @@ CSocket::CSocket()
     //pthread_mutex_init(&m_recvMessageQueueMutex, NULL); //互斥量初始化 
 
     // 各种队列相关
-    m_iSendMsgQueueCount = 0;           // 发消息队列大小
-    m_total_recyconnection_n = 0;       // 待释放连接队列大小
+    m_iSendMsgQueueCount            = 0;        // 发消息队列大小
+    m_total_recyconnection_n        = 0;        // 待释放连接队列大小
+    m_cur_size_                     = 0;        // 当前计时队列尺寸
+    m_timer_value_                  = 0;        // 当前计时队列头部的时间值
 
     return;
 }
@@ -134,6 +136,19 @@ bool CSocket::Initialize_subproc()
     {
         return false;
     }
+
+    if (m_ifkickTimeCount == 1) // 是否开启踢人时钟， 1：开启， 0：不开启
+    {
+        ThreadItem *pTimemonitor;       // 专门用来处理到期不发心跳包的用户踢出的线程
+        m_threadVector.push_back(pTimemonitor = new ThreadItem(this));
+        err = pthread_create(&pTimemonitor->_Handle, NULL, ServerTimerQueueMonitorThread, pTimemonitor);
+        if(err != 0)
+        {
+            ngx_log_stderr(0,"CSocket::Initialize_subproc()中pthread_create(ServerTimerQueueMonitorThread)失败.");
+            return false;
+        }
+    }
+
     return true;
     
 }
@@ -195,10 +210,15 @@ void CSocket::clearMsgSendQueue()
 // 专门用于读各种配置项
 void CSocket::ReadConf()
 {
-    CConfig *p_config = CConfig::GetInstance();
-    m_worker_connections = p_config->GetIntDefault("worker_connections", m_worker_connections); // epoll连接的最大项数
-    m_ListenPortCount    = p_config->GetIntDefault("ListenPortCount", m_ListenPortCount);       // 取得所要监听的端口数量
-    m_RecyConnectionWaitTime  = p_config->GetIntDefault("Sock_RecyConnectionWaitTime",m_RecyConnectionWaitTime); //等待这么些秒后才回收连接
+    CConfig *p_config           = CConfig::GetInstance();
+    m_worker_connections        = p_config->GetIntDefault("worker_connections", m_worker_connections);              // epoll连接的最大项数
+    m_ListenPortCount           = p_config->GetIntDefault("ListenPortCount", m_ListenPortCount);                    // 取得所要监听的端口数量
+    m_RecyConnectionWaitTime    = p_config->GetIntDefault("Sock_RecyConnectionWaitTime",m_RecyConnectionWaitTime);  //等待这么些秒后才回收连接
+
+    m_ifkickTimeCount           = p_config->GetIntDefault("Sock_WaitTimeEnable", 0);                                // 是否开启踢人时钟， 1：开启， 0：不开启
+    m_iWaitTime                 = p_config->GetIntDefault("Sock_MaxWaitTime", m_iWaitTime);                         // 多少秒检测一次是否心跳超时，只有当socket_waitTimeEnable = 1时，本项才有用
+    m_iWaitTime                 = (m_iWaitTime > 5)?m_iWaitTime:5;                                                  // 不建议地域5s，因为心跳无需太频繁
+
     return;
 }
 
@@ -894,4 +914,25 @@ void* CSocket::ServerSendQueueThread(void* threadData)
     
 }
 
+// 主动关闭一个连接时要做的一些善后处理函数
+void CSocket::zdCloseSocketProc(lpngx_connection_t p_Conn)
+{
+    if (m_ifkickTimeCount == 1)
+    {
+        DeleteFromTimerQueue(p_Conn);       // 把时间队列中的连接移除
+    }
 
+    if (p_Conn->fd != -1)
+    {
+        close(p_Conn->fd);          // 这个socket关闭，关闭后epoll就会被从红黑树中删除，所以这之后无法收到任何epoll事件
+        p_Conn->fd = -1;
+    }
+    
+    if (p_Conn->iThrowsendCount > 0)
+    {
+        --p_Conn->iThrowsendCount;  // 归0
+    }
+    
+    inRecyConnectQueue(p_Conn);
+    return;
+}
