@@ -25,7 +25,7 @@
 #include "ngx_c_lockmutex.h"  //自动释放互斥量的一个类
 
 //来数据时候的处理，当连接上有数据来的时候，本函数会被ngx_epoll_process_events()所调用  ,官方的类似函数为ngx_http_wait_request_handler();
-void CSocket::ngx_wait_request_handler(lpngx_connection_t pConn)
+void CSocket::ngx_read_request_handler(lpngx_connection_t pConn)
 {
     // 收包，注意这里使用的第二个和第三个参数，我这里用的始终都是这俩个参数，所以必须要保证 pConn->precvbuf 指向正确的收包位置，保证c->irecvlen指向正确的收包宽度
     ssize_t reco = recvproc(pConn, pConn->precvbuf, pConn->irecvlen);
@@ -150,7 +150,7 @@ ssize_t CSocket::recvproc(lpngx_connection_t pConn, char *buff, ssize_t buflen) 
         {
             // 我认为LT模式不该出现这个errno，而且这个其实也不是错误，所以不当做错误处理
             // 因为我们这里是非阻塞套接字，所以这里其实也不该出现这个错误
-            ngx_log_stderr(errno,"CSocekt::recvproc()中errno == EINTR成立，出乎我意料！");//epoll为LT模式不应该出现这个返回值，所以直接打印出来瞧瞧
+            ngx_log_stderr(errno,"CSocket::recvproc()中errno == EINTR成立，出乎我意料！");//epoll为LT模式不应该出现这个返回值，所以直接打印出来瞧瞧
             return -1; //不当做错误处理，只是简单返回
         }
 
@@ -356,4 +356,111 @@ void CSocket::threadRecvProcFunc(char *pMsgBuf)
 {
 
     return;
+}
+
+// 设置数据发送是的写处理函数，当数据可写时，epoll通知我们，在int CSocket::ngx_epoll_process_events(int timer)中调用此函数
+// 能够走到这里，数据就是没发送完毕，要继续发送
+void CSocket::ngx_write_request_handler(lpngx_connection_t pConn)
+{
+    CMemory *p_memory = CMemory::GetInstance();
+
+    // 这些代码可以参考 void *CSocket::ServerSendQueueThread(void * threadData)
+    ssize_t sendsize = sendproc(pConn, pConn->precvbuf, pConn->isendlen);
+
+    if (sendsize > 0 && sendsize != pConn->isendlen)
+    {
+        // 没有完全发送完毕，数据只发出去了一部分，那么发送到了哪里？剩余多少？继续记录，方便下次sendproc()时使用
+        pConn->psendbuf = pConn->psendbuf + sendsize;
+        pConn->isendlen = pConn->isendlen - sendsize;
+        return;
+    }
+    else if (sendsize == -1)
+    {
+        // 这不太可能，可以发送数据时系统通知我发数据，我发送数据时，却告知我发送缓冲区满？
+        ngx_log_stderr(errno,"CSocket::ngx_write_request_handler()时if(sendsize == -1)成立，这很怪异。"); //打印个日志，别的先不干啥
+        return;
+    }
+    
+    if (sendsize > 0 && sendsize == pConn->isendlen)    // 成功发送完毕，做个通知
+    {
+        // 如果是成功的发送完毕数据，则把写事件通知从epoll中移除，其他情况，那就是断线了，等着系统把连接从红黑树中移除即可
+        if (ngx_epoll_oper_event(
+            pConn->fd,              // socket句柄
+            EPOLL_CTL_MOD,          // 事件类型，这里是修改【因为我们准备减去写通知】
+            EPOLLOUT,               // 标志，这里代表要减去的标志，EPOLLOUT：可写【可写的时候通知我】
+            1,                      // 对于事件类型为增加的，EPOLL_CTL_MOD需要这个参数， 0：增加，1：减去， 2：完全覆盖
+            pConn                   // 连接池中的连接
+        ) == -1)
+        {
+            // 有这种情况发生？先do nothing
+             ngx_log_stderr(errno,"CSocket::ngx_write_request_handler()中ngx_epoll_oper_event()失败。");
+        }
+        ngx_log_stderr(0,"CSocket::ngx_write_request_handler()中数据发送完毕，很好。"); //做个提示吧，线上可以干掉
+    }
+    // 能走下来的，要么是数据发送完毕了，要么是对端断开了，开始执行收尾工作
+
+    // 数据发送完毕，或者把需要发送的数据干掉，都说明发送缓冲区可能有地方了，让发送线程往下走，判断能否发送新数据
+    if (sem_post(&m_semEventSendQueue) == -1)
+    {
+        ngx_log_stderr(0,"CSocket::ngx_write_request_handler()中sem_post(&m_semEventSendQueue)失败.");
+    }
+    
+    p_memory->FreeMemory(pConn->psendMemPointer);       // 释放内存
+    pConn->psendMemPointer = NULL;
+    --pConn->iThrowsendCount;                           // 建议放在最后执行
+    return;
+}
+
+// 发送数据专用函数，返回本次发送的字节数
+// 返回 > 0 成功发送了一些字节
+// = 0， 估计对方断线了
+// = -1，errno == EAGAIN,本方发送缓冲区满了
+// = -2，errno != EAGAIN != EWOULDBLOCK != EINTR 一般认为都是对端断开连接的错误
+ssize_t CSocket::sendproc(lpngx_connection_t c, char *buff, ssize_t size) // ssize_t是有符号整型，在32位机器上等同与int，在64位机器上等同与long int，size_t就是无符号型的ssize_t
+{
+    // 这里借鉴了官方nginx函数ngx_unix_send()的写法
+    ssize_t n;
+
+    for (;;)
+    {
+        n = send(c->fd, buff, size, 0);     // send()系统函数，最后一个参数flag，一般为0
+        if (n > 0)  // 成功发送了一些数据
+        {
+            // 发送成功一些数据，但是发送了多少，我这里并不关心，也不需要再次send
+            // 这里有两种情况
+            // （1）n == size 也就是想发送多少都发送成功了，也不需要再次send()
+            // （2）n < size 没发送完毕，那肯定是发送缓冲区满了，所以也不必重新send发送，直接返回
+            return n;       // 返回本次发送的字节数
+        }
+
+        if (n == 0)
+        {
+            // send()返回0？一般recv()返回0表示断开，send()返回0，这里就直接返回0【让调用者处理】，这里我认为send()返回0，要么是你发送的字节是0，要么是对端可能断开
+            // 网上查资料发现：send == 0表示超时，对方主动关闭了连接过程
+            // 我们写代码要遵循一个原则，连接断开，我们并不在send动作里处理诸如关闭socket这种动作，集中到recv那里进行处理，否者send,recv都处理连接断开，关闭socket会乱套
+            // 连接断开epoll会通知并且 recvproc()里面会处理，不在这里处理
+            return 0;
+        }
+        
+        if (errno == EAGAIN)    // 这个东西应该等于 EWOULDBLOCK
+        {
+            // 内核缓冲区满，这个不算错误
+            return -1;      // 表示发送缓冲区满了
+        }
+
+        if (errno == EINTR)
+        {
+            // 这个应该也不算错误，收到某个信号导致send产生这个错误？
+            // 参考官方nginx的写法，打印一个日志，其他什么也不干，那就是等到下一次for循环重新send试一次
+            ngx_log_stderr(errno,"CSocket::sendproc()中send()失败.");  //打印个日志看看啥时候出这个错误
+            //其他不需要做什么，等下次for循环吧            
+        }
+        else
+        {
+            // 走到这里表示是其他错误码，都表示错误，错误这里也不断开socket，依旧等待recv()来统一处理，因为是多线程，send()也处理断开，recv()也处理断开，很难处理好
+            return -2;
+        }
+        
+    }
+    
 }

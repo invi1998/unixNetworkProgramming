@@ -219,7 +219,7 @@ void CSocket::ngx_free_connection(lpngx_connection_t p_Conn)
 // 有些连接，我们不希望马上进行释放，而是要隔一段时间后再进行进行释放以确保服务器的稳定，所以，我们把这种隔一段时间才释放的连接放到一个队列中来
 void CSocket::inRecyConnectQueue(lpngx_connection_t pConn)
 {
-    // ngx_log_stderr(0,"CSocekt::inRecyConnectQueue()执行，连接入到回收队列中.");
+    // ngx_log_stderr(0,"CSocket::inRecyConnectQueue()执行，连接入到回收队列中.");
     CLock lock(&m_recyconnqueueMutex);          // 针对连接回收列表的互斥量，以线程ServerRecyConnectionThread()也要用到这个回收列表
 
     pConn->inRecyTime = time(NULL);             // 记录回收时间
@@ -252,7 +252,7 @@ void *CSocket::ServerRecyConnectionThread(void * threadData)
             err = pthread_mutex_lock(&pSocketObj->m_recyconnqueueMutex);
             if (err != 0)
             {
-                ngx_log_stderr(err,"CSocekt::ServerRecyConnectionThread()中pthread_mutex_lock()失败，返回的错误码为%d!",err);
+                ngx_log_stderr(err,"CSocket::ServerRecyConnectionThread()中pthread_mutex_lock()失败，返回的错误码为%d!",err);
             }
 
 lblRRTD:
@@ -275,7 +275,7 @@ lblRRTD:
                 --pSocketObj->m_total_recyconnection_n;         // 待释放连接队列大小-1
                 pSocketObj->m_recyconnectionList.erase(pos);    // 迭代器已经失效，但是pos所指向的内容在p_Conn里保存着
 
-                // ngx_log_stderr(0,"CSocekt::ServerRecyConnectionThread()执行，连接%d被归还.",p_Conn->fd);
+                // ngx_log_stderr(0,"CSocket::ServerRecyConnectionThread()执行，连接%d被归还.",p_Conn->fd);
                 
                 pSocketObj->ngx_free_connection(p_Conn);        // 归还参数pConn所代表的连接到连接池中
                 goto lblRRTD;

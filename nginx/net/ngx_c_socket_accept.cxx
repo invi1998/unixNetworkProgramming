@@ -147,7 +147,8 @@ void CSocket::ngx_event_accept(lpngx_connection_t oldc)
 
         newc->listening = oldc->listening;                      // 连接对象，和监听对象关联，方便通过连接对象找监听对象【关联到监听端口】
         // newc->w_ready = 1;                                      // 标记可以写，新连接写事件肯定是ready的，【从连接池拿出一个连接时这个连接的所有成员都是0】
-        newc->rhandler = &CSocket::ngx_wait_request_handler;    // 设置数据来的时候的读处理函数。其实官方nginx中是ngx_http_wait_request_handler()
+        newc->rhandler = &CSocket::ngx_read_request_handler;    // 设置数据来的时候的读处理函数。其实官方nginx中是ngx_http_wait_request_handler()
+        newc->whandler = &CSocket::ngx_write_request_handler;   // 设置数据发送时的协处理函数
 
         // 客户端应该主动发送第一次的数据，这里读事件加入epoll监控
         // s,                   socket句柄

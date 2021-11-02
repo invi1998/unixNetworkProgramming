@@ -141,7 +141,8 @@ class CSocket
 
         // 一些业务处理函数handler
         void ngx_event_accept(lpngx_connection_t oldc);                                 // 建立新连接
-        void ngx_wait_request_handler(lpngx_connection_t pConn);                        // 设置数据来的时候的读处理函数
+        void ngx_read_request_handler(lpngx_connection_t pConn);                        // 设置数据来的时候的读处理函数
+        void ngx_write_request_handler(lpngx_connection_t pConn);                       // 设置数据发送时的写处理函数
         void ngx_close_connection(lpngx_connection_t pConn);                            // 用户连入，我们accept()的时候，得到的socket在处理中产生失败，则资源用这个函数进行释放[改为通用连接关闭函数]
                                                                                         // 因为这里涉及到好几个要释放的资源，所以写成函数
 
@@ -165,7 +166,7 @@ class CSocket
 
         // 线程相关函数
         static void* ServerRecyConnectionThread(void *threadData);  // 专门用来回收连接的线程
-        //static void* ServerSendQueueThread(void *threadData);     // 专门用来发送数据的线程
+        static void* ServerSendQueueThread(void *threadData);     // 专门用来发送数据的线程
 
     protected:
         //一些和网络通讯有关的成员变量

@@ -23,7 +23,8 @@
 #include "ngx_c_memory.h"
 #include "ngx_c_crc32.h"
 #include "ngx_c_slogic.h"  
-#include "ngx_logiccomm.h" 
+#include "ngx_logiccomm.h"
+#include "ngx_c_lockmutex.h"
 
 // 定义成员函数指针
 typedef bool (CLogicSocket::*handler)(  lpngx_connection_t pConn,           // 连接池中连接的指针
@@ -180,6 +181,7 @@ bool CLogicSocket::_HandleRegister(lpngx_connection_t pConn,LPSTRUC_MSG_HEADER p
     int     iSendLen = sizeof(STRUCT_REGISTER);
 
     // a) 分配要发送出去的包的内存
+    iSendLen = 65000;       // unsigned最大也就是这个值
     char *p_sendbuf = (char *)p_memory->AllocMemory(m_iLenMsgHeader + m_iLenPkgHeader + iSendLen, false);   // 准备发送的格式，这里是消息头 + 包头 + 包体
     // b) 填充消息头
     memcpy(p_sendbuf, pMsgHeader, m_iLenMsgHeader);                     // 消息头直接拷贝到这里
@@ -198,19 +200,18 @@ bool CLogicSocket::_HandleRegister(lpngx_connection_t pConn,LPSTRUC_MSG_HEADER p
     pPkgHeader->crc32   = htonl(pPkgHeader->crc32);
 
     //f)发送数据包
-    /*msgSend(p_sendbuf);
+    msgSend(p_sendbuf);
     //如果时机OK才add_event
-    if(ngx_epoll_add_event(pConn->fd,                 //socket句柄
-                                0,1,              //读，写 ,这里读为1，表示客户端应该主动给我服务器发送消息，我服务器需要首先收到客户端的消息；
-                                0,//EPOLLET,      //其他补充标记【EPOLLET(高速模式，边缘触发ET)】
-                                                      //后续因为实际项目需要，我们采用LT模式【水平触发模式/低速模式】
-                                EPOLL_CTL_MOD,    //事件类型【增加，还有删除/修改】                                    
-                                pConn              //连接池中的连接
-                                ) == -1)
-                                {
-                                    //ngx_log_stderr(0,"111111111111!");
-                                }
-    */
+    // if(ngx_epoll_add_event(pConn->fd,                 //socket句柄
+    //                             0,1,              //读，写 ,这里读为1，表示客户端应该主动给我服务器发送消息，我服务器需要首先收到客户端的消息；
+    //                             0,//EPOLLET,      //其他补充标记【EPOLLET(高速模式，边缘触发ET)】
+    //                                                   //后续因为实际项目需要，我们采用LT模式【水平触发模式/低速模式】
+    //                             EPOLL_CTL_MOD,    //事件类型【增加，还有删除/修改】                                    
+    //                             pConn              //连接池中的连接
+    //                             ) == -1)
+    //                             {
+    //                                 //ngx_log_stderr(0,"111111111111!");
+    //                             }
 
    /*
     sleep(100);  //休息这么长时间
@@ -229,6 +230,8 @@ bool CLogicSocket::_HandleRegister(lpngx_connection_t pConn,LPSTRUC_MSG_HEADER p
 
     return true;
 }
+
+
 bool CLogicSocket::_HandleLogIn(lpngx_connection_t pConn,LPSTRUC_MSG_HEADER pMsgHeader,char *pPkgBody,unsigned short iBodyLength)
 {
     ngx_log_stderr(0,"执行了CLogicSocket::_HandleLogIn()!");
