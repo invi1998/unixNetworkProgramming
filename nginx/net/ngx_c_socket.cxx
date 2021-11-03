@@ -91,23 +91,31 @@ bool CSocket::Initialize_subproc()
     // 发消息互斥量初始化
     if (pthread_mutex_init(&m_sendMessageQueueMutex, NULL) != 0)
     {
-        ngx_log_stderr(0, "CSocket::Initialize()中pthread_mutex_init(&m_sendMessageQueueMutex)失败.");
+        ngx_log_stderr(0, "CSocket::Initialize_subproc()中pthread_mutex_init(&m_sendMessageQueueMutex)失败.");
         return false;
     }
 
     // 连接相关互斥量初始化
     if (pthread_mutex_init(&m_connctionMutex, NULL) != 0)
     {
-        ngx_log_stderr(0,"CSocket::Initialize()中pthread_mutex_init(&m_connectionMutex)失败.");
+        ngx_log_stderr(0,"CSocket::Initialize_subproc()中pthread_mutex_init(&m_connectionMutex)失败.");
         return false; 
     }
 
     // 连接回收队列相关互斥量初始化
     if (pthread_mutex_init(&m_recyconnqueueMutex, NULL) != 0)
     {
-        ngx_log_stderr(0,"CSocket::Initialize()中pthread_mutex_init(&m_recyconnqueueMutex)失败.");
+        ngx_log_stderr(0,"CSocket::Initialize_subproc()中pthread_mutex_init(&m_recyconnqueueMutex)失败.");
         return false; 
     }
+
+    // 和事件处理队列有关的互斥量初始化
+    if (pthread_mutex_init(&m_timequeueMutex, NULL) != 0)
+    {
+        ngx_log_stderr(0,"CSocket::Initialize_subproc()中pthread_mutex_init(&m_timequeueMutex)失败.");
+        return false;
+    }
+    
 
     // 初始化发消息相关信号量，信号量用于 进程 /  线程 之间的同步，虽然 互斥量【pthread_mutex_lock】和条件变量【pthread_cond_wait】都是线程之间的同步手段
     // 但是这里用信号量实现，则 跟容易理解，跟容易简化问题，使用信号量书写的代码短小且清晰
@@ -115,7 +123,7 @@ bool CSocket::Initialize_subproc()
     // 第三个参数 = 0；表示信号量的初始值，为 0 时，调用sem_wait()就会卡在那里等待
     if (sem_init(&m_semEventSendQueue, 0, 0) == -1)
     {
-        ngx_log_stderr(0,"CSocket::Initialize()中sem_init(&m_semEventSendQueue,0,0)失败.");
+        ngx_log_stderr(0,"CSocket::Initialize_subproc()中sem_init(&m_semEventSendQueue,0,0)失败.");
         return false;
     }
     
@@ -184,11 +192,13 @@ void CSocket::Shutdown_subproc()
     // （3）队列相关
     clearMsgSendQueue();
     clearconnection();
+    clearAllFromTimerQueue();
 
     // (4)多线程相关
     pthread_mutex_destroy(&m_connectionMutex);          // 连接相关互斥量释放
     pthread_mutex_destroy(&m_sendMessageQueueMutex);    // 发消息互斥量释放
     pthread_mutex_destroy(&m_recyconnqueueMutex);       // 连接回收消息队列相关的互斥量释放
+    pthread_mutex_destroy(&m_timequeueMutex);           // 时间处理队列相关的互斥量释放
     sem_destroy(&m_semEventSendQueue);                  // 发消息相关线程互斥量释放
 }
 

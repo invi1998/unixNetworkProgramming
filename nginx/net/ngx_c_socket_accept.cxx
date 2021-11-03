@@ -170,6 +170,12 @@ void CSocket::ngx_event_accept(lpngx_connection_t oldc)
             return; // 直接返回
         }
 
+        if (m_ifkickTimeCount == 1)
+        {
+            AddToTimerQueue(newc);
+        }
+        
+
         break;      // 一般就是循环一次就跳出去
     
     } while (1);

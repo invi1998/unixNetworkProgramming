@@ -4,6 +4,7 @@
 //收发命令宏定义
 
 #define _CMD_START	                    0  
+#define _CMD_PING				   	    _CMD_START + 0   //ping命令【心跳包】
 #define _CMD_REGISTER 		            _CMD_START + 5   //注册
 #define _CMD_LOGIN 		                _CMD_START + 6   //登录
 

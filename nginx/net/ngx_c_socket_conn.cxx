@@ -219,13 +219,32 @@ void CSocket::ngx_free_connection(lpngx_connection_t p_Conn)
 // 有些连接，我们不希望马上进行释放，而是要隔一段时间后再进行进行释放以确保服务器的稳定，所以，我们把这种隔一段时间才释放的连接放到一个队列中来
 void CSocket::inRecyConnectQueue(lpngx_connection_t pConn)
 {
+    std::list<lpngx_connection_t>::iterator pos;
+    bool iffind = false;
     // ngx_log_stderr(0,"CSocket::inRecyConnectQueue()执行，连接入到回收队列中.");
     CLock lock(&m_recyconnqueueMutex);          // 针对连接回收列表的互斥量，以线程ServerRecyConnectionThread()也要用到这个回收列表
+
+    // 如下判断防止连接被多次扔到回收站中来
+    for (pos = m_recyconnectionList.begin(); pos != m_recyconnectionList.end(); ++pos)
+    {
+        if ((*pos) == pConn)
+        {
+            iffind = true;
+            break;
+        }
+        
+    }
+    if (iffind == true)     // 找到了，不必在往里面加这个连接了，已经加过了
+    {
+        // 这里有必要保证一个连接只能入一次垃圾回收队列
+        return;
+    }
 
     pConn->inRecyTime = time(NULL);             // 记录回收时间
     ++pConn->iCurrsequence;
     m_recyconnectionList.push_back(pConn);      // 等待ServerRecyConnectionThread线程自会处理
     ++m_total_recyconnection_n;                 // 等待释放连接队列大小+1
+
     return;
 }
 
@@ -270,6 +289,16 @@ lblRRTD:
 
                 // 到释放时间
                 // ...将来这里可能还要做一些是否能释放的判断
+
+                // 凡是到释放时间的，iThrowsendCount都应该为0，这里加点日志判断一下
+                if (p_Conn->iThrowsendCount > 0)
+                {
+                    // 这里很极端，一个用户，刚刚好在他主动断开连接的时候，他的心跳超时也到了，有可能在服务端close掉的时候，他正好也发送close包来主动关闭，就会出现两个线程同时来调用zdCloseSocketProc()函数，造成同一个socket被close两次
+                    // 然后它的iThrowsendCount就会被减为-1
+                    ngx_log_stderr(0,"CSocket::ServerRecyConnectionThread()中到释放时间却发现p_Conn.iThrowsendCount!=0，这个不该发生");
+                    //其他先暂时啥也不敢，路程继续往下走，继续去释放吧。
+                }
+                
 
                 // 流程走到这里，表示可以释放，那就开始释放
                 --pSocketObj->m_total_recyconnection_n;         // 待释放连接队列大小-1
