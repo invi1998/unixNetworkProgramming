@@ -246,9 +246,13 @@ void CLogicSocket::procPingTimeOutChecking(LPSTRUC_MSG_HEADER tmpmsg, time_t cur
     if (tmpmsg->iCurrsequence == tmpmsg->pConn->iCurrsequence)      // 此连接没断
     {
         lpngx_connection_t p_Conn = tmpmsg->pConn;
-
+        if (m_ifTimeOutKick == 1)   // 能调用到本函数第一个条件肯定成立，所以第一个条件加不加无所谓，主要是第二个条件 if(/*m_ifkickTimeCount == 1 && */m_ifTimeOutKick == 1)
+        {
+            // 到时间直接踢出去的需求
+            zdCloseSocketProc(p_Conn);
+        }
         // 超时踢出的判断标准就是 每次检测的时间间隔*3 ，超出这个事件没法送心跳包，就踢【这个可以根据实际自由设定】
-        if ((cur_time - p_Conn->lastPingTime) > (m_iWaitTime*3+10))
+        else if ((cur_time - p_Conn->lastPingTime) > (m_iWaitTime*3+10))
         {
             // 踢出 【如果此时此刻该用户正好断线，则这个socket可能立即被后续上来的连接复用，如果真的有人这么倒霉，赶上这个点了，那么可能就会错踢，错踢就错踢了吧，让他重新连接一次】
             ngx_log_stderr(0,"时间到不发心跳包，踢出去!");   //感觉OK

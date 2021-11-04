@@ -48,7 +48,10 @@ void ngx_connection_s::GetOneToUse()
     iThrowsendCount = 0;                                        // 原子操作
     psendMemPointer = NULL;                                     // 发送数据头指针记录
     events          = 0;                                        // epoll事件先给0
+    lastPingTime    = time(NULL);                               // 上次ping的时间
 
+    FloodAttackCount    = 0;                                    // Flood攻击上次收到包的时间
+    FloodkickLastTime   = 0;                                    // Flood攻击在该时间内收到包的次数统计
 
 }
 
@@ -244,6 +247,7 @@ void CSocket::inRecyConnectQueue(lpngx_connection_t pConn)
     ++pConn->iCurrsequence;
     m_recyconnectionList.push_back(pConn);      // 等待ServerRecyConnectionThread线程自会处理
     ++m_total_recyconnection_n;                 // 等待释放连接队列大小+1
+    --m_onlineUserCount;                        // 连入用户数量-1
 
     return;
 }

@@ -81,6 +81,10 @@ struct ngx_connection_s
     // 和心跳包有关
     time_t                      lastPingTime;                       // 上次ping的时间【上次发送心跳包的时间】
 
+    // 和网络安全有关
+    uint64_t                    FloodkickLastTime;                  // Flood攻击上次收到包的时间
+    int                         FloodAttackCount;                   // Flood攻击在该事件内收到包的次数统计
+
 
     // ------------------------------------------------------------------------------------------
     lpngx_connection_t          next;                               // 这个指针，指向下一个本类型对象，用于把空闲的连接池对象串起来构成一个单向链表，方便取用
@@ -122,7 +126,7 @@ class CSocket
         int ngx_epoll_init();                               // epoll功能初始化
         // int ngx_epoll_add_event(int fd, int readevent, int writeevent,uint32_t otherflag,uint32_t eventtype,lpngx_connection_t c);
                                                             // epool增加事件
-        int ngx_epoll_provess_events(int timer);            // epoll等待接收和处理事件
+        int ngx_epoll_process_events(int timer);            // epoll等待接收和处理事件
         int ngx_epoll_oper_event(int fd, uint32_t eventtype, uint32_t flag, int bcaction, lpngx_connection_t pConn);
                                                             // epoll操作事件
 
@@ -145,8 +149,8 @@ class CSocket
                                                                                         // 因为这里涉及到好几个要释放的资源，所以写成函数
 
         ssize_t recvproc(lpngx_connection_t pConn, char *buff, ssize_t buflen);         // 接收从客户端来的数据专用函数
-        void ngx_wait_request_handler_proc_p1(lpngx_connection_t c);                    // 包头接收完整后的处理函数，这里称之为包处理阶段1，写成函数方便复用
-        void ngx_wait_request_handler_proc_plast(lpngx_connection_t c);                 // 收到一个完整的包后的处理函数                                                    
+        void ngx_wait_request_handler_proc_p1(lpngx_connection_t pConn, &isflood);      // 包头接收完整后的处理函数，这里称之为包处理阶段1，写成函数方便复用
+        void ngx_wait_request_handler_proc_plast(lpngx_connection_t pConn, &isflood);   // 收到一个完整的包后的处理函数                                                    
         void clearMsgSendQueue();                                                       // 清理消息队列
 
         ssize_t sendproc(lpngx_connection_t pConn, char *buff, ssize_t size);           // 将数据发送到客户端
@@ -170,6 +174,9 @@ class CSocket
         void    DeleteFromTimerQueue(lpngx_connection_t pConn);     // 把指定用户TCP连接从timer表中扣出去
         void    clearAllFromTimerQueue();                           // 清理时间队列中所有内容 
 
+        // 和网络安全相关的函数
+        bool    TestFlood(lpngx_connection_t pConn);                // 测试是否flood攻击成立，成立则返回true，否者返回false
+
         // 线程相关函数
         static void* ServerRecyConnectionThread(void *threadData);  // 专门用来回收连接的线程
         static void* ServerSendQueueThread(void *threadData);       // 专门用来发送数据的线程
@@ -177,10 +184,12 @@ class CSocket
 
     protected:
         //一些和网络通讯有关的成员变量
-        size_t                         m_iLenPkgHeader;                    //sizeof(COMM_PKG_HEADER);		
-        size_t                         m_iLenMsgHeader;                    //sizeof(STRUC_MSG_HEADER);
+        size_t                          m_iLenPkgHeader;                    // sizeof(COMM_PKG_HEADER);		
+        size_t                          m_iLenMsgHeader;                    // sizeof(STRUC_MSG_HEADER);
 
-        int                            m_iWaitTime;                        // 多少秒检测一次是否 心跳超时，只有当Sock_WaitTimeEnable = 1 时，本项才有用
+        // 时间相关
+        int                             m_ifTimeOutKick;                    // 当时间达到Sock_MaxWaitTime指定的时间时，直接把客户端踢出去，只有当sock_waitTimeEnable = 1时，本项才有用
+        int                             m_iWaitTime;                        // 多少秒检测一次是否 心跳超时，只有当Sock_WaitTimeEnable = 1 时，本项才有用
 
 
     private:
@@ -235,6 +244,13 @@ class CSocket
         std::multimap<time_t, LPSTRUC_MSG_HEADER>   m_timerQueuemap;        // 时间队列
         size_t                          m_cur_size_;                        // 时间队列的尺寸
         time_t                          m_timer_value_;                     // 当前计时队列头部时间值
+
+        // 在线用户相关
+        std::atomic<int>                m_onlineUserCount;                  // 当前在线用户数统计
+        // 网络安全相关
+        int                             m_floodAkEnable;                    // Flood攻击检测是否开启 1：开启，  0：不开启
+        unsigned    int                 m_floodTimeInterval;               // 表示每次收到数据的时间间隔是100ms
+        int                             m_floodKickCount;                   // 累计多少次踢出此人
 
 };
 

@@ -27,6 +27,7 @@
 //来数据时候的处理，当连接上有数据来的时候，本函数会被ngx_epoll_process_events()所调用  ,官方的类似函数为ngx_http_wait_request_handler();
 void CSocket::ngx_read_request_handler(lpngx_connection_t pConn)
 {
+    bool isflood = false;       // 是否flood攻击
     // 收包，注意这里使用的第二个和第三个参数，我这里用的始终都是这俩个参数，所以必须要保证 pConn->precvbuf 指向正确的收包位置，保证c->irecvlen指向正确的收包宽度
     ssize_t reco = recvproc(pConn, pConn->precvbuf, pConn->irecvlen);
     if (reco <= 0)
@@ -39,7 +40,7 @@ void CSocket::ngx_read_request_handler(lpngx_connection_t pConn)
     {
         if (reco == m_iLenPkgHeader)        // 正好接收到完整包头，这里拆解包头
         {
-            ngx_wait_request_handler_proc_p1(pConn);    // 调用专门针对包头处理完整的函数进行处理
+            ngx_wait_request_handler_proc_p1(pConn, isflood);    // 调用专门针对包头处理完整的函数进行处理
         }
         else
         {
@@ -56,7 +57,7 @@ void CSocket::ngx_read_request_handler(lpngx_connection_t pConn)
         if (pConn->irecvlen == reco) // 要求收到的宽度和我们实际收到的宽度相等
         {
             // 包头收完整了
-            ngx_wait_request_handler_proc_p1(pConn);    // 调用专门针对包头处理的函数
+            ngx_wait_request_handler_proc_p1(pConn, isflood);    // 调用专门针对包头处理的函数
         }
         else
         {
@@ -74,7 +75,13 @@ void CSocket::ngx_read_request_handler(lpngx_connection_t pConn)
         if (reco == pConn->irecvlen)
         {
             // 收到的宽度等于要接收的宽度，包体也收完整了
-            ngx_wait_request_handler_proc_plast(pConn);
+            if (m_floodAkEnable == 1)
+            {
+                // Flood攻击是否开启
+                isflood = TestFlood(pConn);
+            }
+            
+            ngx_wait_request_handler_proc_plast(pConn, isflood);
         }
         else
         {
@@ -91,7 +98,13 @@ void CSocket::ngx_read_request_handler(lpngx_connection_t pConn)
         if (pConn->irecvlen == reco)
         {
             // 包体接收完整了
-            ngx_wait_request_handler_proc_plast(pConn);
+            if (m_floodAkEnable == 1)
+            {
+                // FloodAkEnable是否开启
+                isflood = TestFlood(pConn);
+            }
+            
+            ngx_wait_request_handler_proc_plast(pConn, isflood);
         }
         else
         {
@@ -102,6 +115,12 @@ void CSocket::ngx_read_request_handler(lpngx_connection_t pConn)
         
     }
 
+    if (isflood == true)
+    {
+        // 客户端flood服务器，则直接把客户端踢掉
+        zdCloseSocketProc(pConn);
+    }
+    
     return;
 }
 
@@ -187,7 +206,7 @@ ssize_t CSocket::recvproc(lpngx_connection_t pConn, char *buff, ssize_t buflen) 
 }
 
 // 包头收完整后的处理，包处理阶段1
-void CSocket::ngx_wait_request_handler_proc_p1(lpngx_connection_t pConn)
+void CSocket::ngx_wait_request_handler_proc_p1(lpngx_connection_t pConn, bool &isflood)
 {
     CMemory *p_memory = CMemory::GetInstance();
 
@@ -241,7 +260,13 @@ void CSocket::ngx_wait_request_handler_proc_p1(lpngx_connection_t pConn)
         {
             // 该报文只有包头无包体【允许一个包只有包头，没有包体】
             // 这相当于收完整了，则直接接入消息队列带后续业务逻辑线程去处理
-            ngx_wait_request_handler_proc_plast(pConn);
+            if (m_floodAkEnable == 1)
+            {
+                // flood攻击检测是否开启
+                isflood = TestFlood(pConn);
+            }
+            
+            ngx_wait_request_handler_proc_plast(pConn, isflood);
         }
         else
         {
@@ -258,7 +283,7 @@ void CSocket::ngx_wait_request_handler_proc_p1(lpngx_connection_t pConn)
 }
 
 // 收到一个完整的包后的处理函数 【plast表示最后阶段】
-void CSocket::ngx_wait_request_handler_proc_plast(lpngx_connection_t pConn)
+void CSocket::ngx_wait_request_handler_proc_plast(lpngx_connection_t pConn, bool &isflood)
 {
     // 把这段内存放到消息队列中来
     // int irmqc = 0;    // 消息队列中当前消息数量
@@ -270,7 +295,20 @@ void CSocket::ngx_wait_request_handler_proc_plast(lpngx_connection_t pConn)
 
     // 激发线程池中的某个线程来处理业务逻辑
     // g_threadPool.Call(irmqc);
-    g_threadpool.inMsgRecvQueueAndSignal(pConn->pnewMemPointer);    // 入消息队列并触发线程处理消息
+
+    if (isflood ==  false)
+    {
+        g_threadpool.inMsgRecvQueueAndSignal(pConn->precvMemPointer);       // 入消息队列并触发线程处理消息
+    }
+    else
+    {
+        // 对于有攻击倾向的恶意用户，先把他的包丢掉
+        CMemory *p_memory = CMemory::GetInstance();
+        p_memory->FreeMemory(pConn->precvMemPointer);       // 直接释放清理内存，根本不会加入到消息队列
+    }
+    
+
+    // g_threadpool.inMsgRecvQueueAndSignal(pConn->pnewMemPointer);    // 入消息队列并触发线程处理消息
 
     pConn->ifnewrecvMem     = false;            // 内存不再需要释放，因为你收完整了包，这个包被上面调用inMsgRecvQueue()移入消息队列，那么释放内存就属于业务逻辑去干， 不需要回收连接到连接池中做了
     pConn->pnewMemPointer   = NULL;

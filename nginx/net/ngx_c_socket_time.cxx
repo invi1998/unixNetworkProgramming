@@ -82,13 +82,18 @@ LPSTRUC_MSG_HEADER CSocket::GetOverTimeTimer(time_t time)
         // 这回确实是有到时间的了【超时的节点】
         ptmp = RemoveFirstTimer();                  // 把这个超时节点从m_timerQueuemap中移除，并把这个节点的第二项返回回来
 
-        // 因为下次超时的时间也依然要判断，所以还要把这个节点加回来
-        time_t newinqueuetime = cur_time + (m_iWaitTime);
-        LPSTRUC_MSG_HEADER tmpMsgHeader = (LPSTRUC_MSG_HEADER)p_memory->AllocMemory(sizeof(STRUC_MSG_HEADER), false);
-        tmpMsgHeader->pConn = ptmp->pConn;
-        tmpMsgHeader->iCurrsequence = ptmp->iCurrsequence;
-        m_timerQueuemap.insert(std::make_pair(newinqueuetime,tmpMsgHeader));        // 自动排序 小 -> 大
-        m_cur_size_++;
+        if (/* m_ifkickTimeCount == 1 && */ m_ifTimeOutKick != 1)   // 能调用到本函数第一个条件肯定成立，所以第一个条件加不加无所谓，主要是第二个条件
+        {
+            // 如果不是要求超时就踢出，则才做这里的事
+            
+            // 因为下次超时的时间也依然要判断，所以还要把这个节点加回来
+            time_t newinqueuetime = cur_time + (m_iWaitTime);
+            LPSTRUC_MSG_HEADER tmpMsgHeader = (LPSTRUC_MSG_HEADER)p_memory->AllocMemory(sizeof(STRUC_MSG_HEADER), false);
+            tmpMsgHeader->pConn = ptmp->pConn;
+            tmpMsgHeader->iCurrsequence = ptmp->iCurrsequence;
+            m_timerQueuemap.insert(std::make_pair(newinqueuetime,tmpMsgHeader));        // 自动排序 小 -> 大
+            m_cur_size_++;
+        }
 
         if (m_cur_size_ > 0)    // 这个判断条件很有必要，因为以后可能在这里扩充别的代码
         {

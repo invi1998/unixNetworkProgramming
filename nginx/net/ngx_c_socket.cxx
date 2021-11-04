@@ -51,6 +51,9 @@ CSocket::CSocket()
     m_cur_size_                     = 0;        // 当前计时队列尺寸
     m_timer_value_                  = 0;        // 当前计时队列头部的时间值
 
+    // 在线用户相关
+    m_onlineUserCount               = 0;        // 在线用户数量统计，先给0
+
     return;
 }
 
@@ -228,6 +231,11 @@ void CSocket::ReadConf()
     m_ifkickTimeCount           = p_config->GetIntDefault("Sock_WaitTimeEnable", 0);                                // 是否开启踢人时钟， 1：开启， 0：不开启
     m_iWaitTime                 = p_config->GetIntDefault("Sock_MaxWaitTime", m_iWaitTime);                         // 多少秒检测一次是否心跳超时，只有当socket_waitTimeEnable = 1时，本项才有用
     m_iWaitTime                 = (m_iWaitTime > 5)?m_iWaitTime:5;                                                  // 不建议地域5s，因为心跳无需太频繁
+    m_ifTimeOutKick             = p_config->GetIntDefault("Sock_TimeOutKick", 0);                                   // 当时间达到Sock_MaxWaitTime指定的时间时，直接把客户端踢出去，只有当Sock_WaitTimeEnable = 1时，本项才有用
+
+    m_floodAkEnable             = p_config->GetIntDefault("Sock_FloodAttackKickEnable", 0);                         // Flood攻击检测是否开启,1：开启   0：不开启
+	m_floodTimeInterval         = p_config->GetIntDefault("Sock_FloodTimeInterval", 100);                           // 表示每次收到数据包的时间间隔是100(毫秒)
+	m_floodKickCount            = p_config->GetIntDefault("Sock_FloodKickCounter", 10);                             // 累积多少次踢出此人               
 
     return;
 }
@@ -832,7 +840,7 @@ void* CSocket::ServerSendQueueThread(void* threadData)
                 
                 // 这里是重点，我们采用epoll的水平触发模式，能走到这里的，应该都是还没有投递写事件到epoll中
                 // epoll水平触发发送数据的改进方案：
-                // 开始不把socket写事件通知假如到epoll中，当我需要写数据的时候，直接调用write/send发送数据
+                // 开始不把socket写事件通知加入到epoll中，当我需要写数据的时候，直接调用write/send发送数据
                 // 如果返回了EAGAIN【发送缓冲区满了，需要等待可写事件才能继续往缓冲区里写数据】，此时，我再把写事件加入到epoll中
                 // 此时, 就变成了在epoll驱动下写数据，全部数据发送完毕之后，在把写事件通知从epoll中移除
                 // 优点：数据不多的时候，可以避免epoll的写事件的增加/删除，提高了程序的执行效率
@@ -945,4 +953,35 @@ void CSocket::zdCloseSocketProc(lpngx_connection_t p_Conn)
     
     inRecyConnectQueue(p_Conn);
     return;
+}
+
+// 测试是否flood攻击成立，成立则返回true，否者返回false
+bool CSocket::TestFlood(lpngx_connection_t pConn)
+{
+    struct timeval  sCurrTime;          // 当前时间结构
+    uint64_t        iCurrTime;          // 当前时间（单位ms)
+    bool reco =     false;
+
+    gettimeofday(&sCurrTime, NULL);     // 取得当前时间
+    iCurrTime = (sCurrTime.tv_sec * 1000 + sCurrTime.tv_usec / 1000);   // 毫秒
+    if ((iCurrTime - pConn->FloodkickLastTime) < m_floodTimeInterval)      // 两次收到包的时间 < 100毫秒
+    {
+        // 发包态频繁记录
+        pConn->FloodAttackCount++;
+        pConn->FloodkickLastTime = iCurrTime;
+    }
+    else
+    {
+        // 既然发包不这么频繁，则恢复计数值
+        pConn->FloodAttackCount = 0;
+        pConn->FloodkickLastTime = iCurrTime;
+    }
+
+    if (pConn->FloodAttackCount >= m_floodKickCount)
+    {
+        // 可以踢人的标志
+        reco = true;
+    }
+    
+     return reco
 }

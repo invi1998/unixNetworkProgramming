@@ -108,6 +108,15 @@ void CSocket::ngx_event_accept(lpngx_connection_t oldc)
 
         // 走到这里，表示accept4()成功了
         // ngx_log_stderr(errno, "accept4成功s=%d", s);    // s这里就是一个句柄了
+
+        if (m_onlineUserCount >= m_worker_connections)       // 用户连接数过多，要关闭该用户的socket，因为现在也还没分配连接，所以直接关闭即可
+        {
+            ngx_log_stderr(0,"超出系统允许的最大连入用户数(最大允许连入数%d)，关闭连入请求(%d)。",m_worker_connections,s);  
+            close(s);
+            return ;
+        }
+        
+
         newc = ngx_get_connection(s);
         if (newc == NULL)
         {
@@ -174,7 +183,7 @@ void CSocket::ngx_event_accept(lpngx_connection_t oldc)
         {
             AddToTimerQueue(newc);
         }
-        
+        ++m_onlineUserCount;        // 连入用户数量+1
 
         break;      // 一般就是循环一次就跳出去
     
