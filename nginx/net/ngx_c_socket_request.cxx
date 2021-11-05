@@ -439,14 +439,24 @@ void CSocket::ngx_write_request_handler(lpngx_connection_t pConn)
     // 能走下来的，要么是数据发送完毕了，要么是对端断开了，开始执行收尾工作
 
     // 数据发送完毕，或者把需要发送的数据干掉，都说明发送缓冲区可能有地方了，让发送线程往下走，判断能否发送新数据
+    // if (sem_post(&m_semEventSendQueue) == -1)
+    // {
+    //     ngx_log_stderr(0,"CSocket::ngx_write_request_handler()中sem_post(&m_semEventSendQueue)失败.");
+    // }
+    
+    // p_memory->FreeMemory(pConn->psendMemPointer);       // 释放内存
+    // pConn->psendMemPointer = NULL;
+    // --pConn->iThrowsendCount;                           // 建议放在最后执行
+
+    // 调整顺序
+    p_memory->FreeMemory(pConn->psendMemPointer);           // 释放内存
+    pConn->psendMemPointer = NULL;
+    --pConn->iThrowsendCount;     // 这个值恢复了，触发下面一行的信号量才有意义
     if (sem_post(&m_semEventSendQueue) == -1)
     {
         ngx_log_stderr(0,"CSocket::ngx_write_request_handler()中sem_post(&m_semEventSendQueue)失败.");
     }
     
-    p_memory->FreeMemory(pConn->psendMemPointer);       // 释放内存
-    pConn->psendMemPointer = NULL;
-    --pConn->iThrowsendCount;                           // 建议放在最后执行
     return;
 }
 
