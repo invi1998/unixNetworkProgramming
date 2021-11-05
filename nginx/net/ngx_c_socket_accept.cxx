@@ -115,7 +115,20 @@ void CSocket::ngx_event_accept(lpngx_connection_t oldc)
             close(s);
             return ;
         }
-        
+
+        // 如果某些恶意用户连上来发了1条数据就断开连接，连续不断的这种短连接，会导致频繁调用ngx_get_connection()使得我们短时间内产生大量的连接，危及本服务器安全
+        if (m_connectionList.size() > (m_worker_connections * 5))
+        {
+            // 比如你允许同时最大2048个连接，但是连接池却又2048*5个这么大容量，这肯定表示短时间内产生大量 连接又断开 ，因为本项目的延迟回收机制，这里连接还在垃圾池中没有被回收
+            if (m_freeconnectionList.size() < m_worker_connections)
+            {
+                // 整个连接池这么大了，而空闲连接却这么小，所以这里我认为是 短时间内产生大量连接，发一个包就断开，我们不可能让这种情况持续发生，所以必须断开新入用户的连接
+                // 一直到m_freeconnectionList变得足够大，【连接池中连接被回收的足够多】
+                close(s);
+                return;
+            }
+            
+        }
 
         newc = ngx_get_connection(s);
         if (newc == NULL)

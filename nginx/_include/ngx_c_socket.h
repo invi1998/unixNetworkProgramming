@@ -84,6 +84,7 @@ struct ngx_connection_s
     // 和网络安全有关
     uint64_t                    FloodkickLastTime;                  // Flood攻击上次收到包的时间
     int                         FloodAttackCount;                   // Flood攻击在该事件内收到包的次数统计
+    std::atomic<int>            iSendCount;                         // 发送队列中有的数据条目数据，若client只发不收，则可能造成此数过大，依据此数据进行踢出处理
 
 
     // ------------------------------------------------------------------------------------------
@@ -116,6 +117,8 @@ class CSocket
         virtual bool Initialize();                          // 初始化函数【父进程中执行】
         virtual bool Initialize_subproc();                  // 初始化函数【子进程中执行】
         virtual void Shutdown_subproc();                    // 关闭退出函数【子进程中执行】
+
+        void printTDInfo();                                 // 打印统计信息
     
     public:
         virtual void threadRecvProcFunc(char *pMsgBuf);     // 处理客户端请求，虚函数，因为将来可以考虑自己来写子类继承本类
@@ -251,6 +254,10 @@ class CSocket
         int                             m_floodAkEnable;                    // Flood攻击检测是否开启 1：开启，  0：不开启
         unsigned    int                 m_floodTimeInterval;               // 表示每次收到数据的时间间隔是100ms
         int                             m_floodKickCount;                   // 累计多少次踢出此人
+
+        // 统计相关
+        time_t                          m_lastprintTime;                    // 上次打印统计信息的时间（10秒打印一次）
+        int                             m_iDiscardSendPkgCount;             // 丢弃的发送数据包的数量
 
 };
 

@@ -77,6 +77,7 @@ CSocket::~CSocket()
 
 // 初始化函数【fork()子进程之前需要做的事】
 // 成功返回true,失败返回false
+// todo 之前是在master进程进行套接字监听，现在计划将其迁移到worker子进程中
 bool CSocket::Initialize()
 {
     ReadConf();     // 读配置项
@@ -285,6 +286,15 @@ bool CSocket::ngx_open_listening_sockets()
             return false;
         }
 
+        // 为处理惊群问题使用reuseport
+        int reuseport = 1;
+        if (setsockopt(isock, SOL_SOCKET, SO_REUSEPORT, (const void *)&reuseport, sizeof(int)) == -1)   // 端口复用需要内核支持
+        {
+            //失败就失败吧，失败顶多是惊群，但程序依旧可以正常运行，所以仅仅提示一下即可
+            ngx_log_stderr(errno,"CSocket::Initialize()中setsockopt(SO_REUSEPORT)失败",i);
+        }
+        
+
         // 设置socket为非阻塞
         if(setnonblocking(isock) == false)
         {
@@ -379,7 +389,33 @@ void CSocket::ngx_close_listening_sockts()
 // 将一个待发送的数据放入到发送消息队列中
 void CSocket::msgSend(char *psendbuf)
 {
+    CMemory *p_memory = CMemory::GetInstance();
+
     CLock lock(&m_sendMessageQueueMutex);
+
+    if (m_iSendMsgQueueCount > 50000)
+    {
+        // 发送队列过大，比如客户端恶意不接收数据，就会导致这个队列越来越大
+        // 那么为了服务器安全考虑，干掉一些数据发送，虽然有可能导致客户端出现问题，但是总比服务器不稳定好很多
+        m_iDiscardSendPkgCount++;
+        p_memory->FreeMemory(psendbuf);
+        return;
+    }
+
+    // 总体数据并无风险，不会导致服务器奔溃，要看个体数据，找一下恶意者
+    LPSTRUC_MSG_HEADER pMsgHeader = (LPSTRUC_MSG_HEADER)psendbuf;
+    lpngx_connection_t p_Conn = pMsgHeader->pConn;
+    if (pConn->iSendCount > 400)
+    {
+        // 该用户收消息太慢【或者干脆不收消息】。积累的该用户的发送队列中的数据条目数过大，认为是恶意用户，直接切断
+        ngx_log_stderr(0,"CSocket::msgSend()中发现某用户%d积压了大量待发送数据包，切断与他的连接！",p_Conn->fd); 
+        m_iDiscardSendPkgCount++;
+        p_memory->FreeMemory(psendbuf);
+        zdCloseSocketProc(p_Conn);      // 直接关闭
+        return;
+    }
+    
+    ++p_Conn->iSendCount;           // 发送队列中有的数据条目+1
     m_MsgSendQueue.push_back(psendbuf);
     ++m_iSendMsgQueueCount;     // 原子操作
 
@@ -828,6 +864,8 @@ void* CSocket::ServerSendQueueThread(void* threadData)
                     continue;
                 }
 
+                --p_Conn->iSendCount;           // 发送队列中有的数据条目数-1
+
                 // 走到这里，可以发送消息，一些必须的信息记录，在发送的东西也要从消息队列中干掉
                 p_Conn->psendMemPointer = pMsgBuf;              // 发送后释放用
                 pos2 = pos;
@@ -845,7 +883,7 @@ void* CSocket::ServerSendQueueThread(void* threadData)
                 // 此时, 就变成了在epoll驱动下写数据，全部数据发送完毕之后，在把写事件通知从epoll中移除
                 // 优点：数据不多的时候，可以避免epoll的写事件的增加/删除，提高了程序的执行效率
                 // （1）直接调用write或者send去发送数据
-                ngx_log_stderr(errno,"即将发送数据%ud。",p_Conn->isendlen);
+                // ngx_log_stderr(errno,"即将发送数据%ud。",p_Conn->isendlen);
 
                 sendsize = pSocketObj->sendproc(p_Conn, p_Conn->psendbuf, p_Conn->isendlen);    // 注意参数
                 if (sendsize > 0)
@@ -857,7 +895,7 @@ void* CSocket::ServerSendQueueThread(void* threadData)
                         p_memory->FreeMemory(p_Conn->psendMemPointer);      // 释放内存
                         p_Conn->psendMemPointer = NULL;
                         p_Conn->iThrowsendCount = 0;                        // 其实这里可以没有，因为此时此刻这个东西就是0
-                        ngx_log_stderr(0,"CSockett::ServerSendQueueThread()中数据发送完毕，很好。"); //做个提示，上线时可以干掉
+                        // ngx_log_stderr(0,"CSockett::ServerSendQueueThread()中数据发送完毕，很好。"); //做个提示，上线时可以干掉
                     }
                     else
                     {
@@ -878,7 +916,7 @@ void* CSocket::ServerSendQueueThread(void* threadData)
                             //有这情况发生？这可比较麻烦，不过先do nothing
                             ngx_log_stderr(errno,"CSocket::ServerSendQueueThread()中ngx_epoll_add_event()失败.");
                         }
-                        ngx_log_stderr(errno,"CSocket::ServerSendQueueThread()中数据没发送完毕【发送缓冲区满】，整个要发送%d，实际发送了%d。",p_Conn->isendlen,sendsize);
+                        // ngx_log_stderr(errno,"CSocket::ServerSendQueueThread()中数据没发送完毕【发送缓冲区满】，整个要发送%d，实际发送了%d。",p_Conn->isendlen,sendsize);
                     }
 
                     continue;       // 继续处理其他消息
@@ -984,4 +1022,31 @@ bool CSocket::TestFlood(lpngx_connection_t pConn)
     }
     
      return reco
+}
+
+// 打印统计信息
+void CSocket::printTDInfo()
+{
+    time_t currtime = time(NULL);
+    if ((currtime - m_lastprintTime) > 10)
+    {
+        // 超过10秒才打印一次
+        int tmprmqc = g_threadpool.getRecvMsgQueueCount();  // 收消息队列
+
+        m_lastprintTime = currtime;
+        int tmpoLUC = m_onlineUserCount;    //atomic做个中转，直接打印atomic类型报错；
+        int tmpsmqc = m_iSendMsgQueueCount; //atomic做个中转，直接打印atomic类型报错；
+        ngx_log_stderr(0,"------------------------------------begin--------------------------------------");
+        ngx_log_stderr(0,"当前在线人数/总人数(%d/%d)。",tmpoLUC,m_worker_connections);        
+        ngx_log_stderr(0,"连接池中空闲连接/总连接/要释放的连接(%d/%d/%d)。",m_freeconnectionList.size(),m_connectionList.size(),m_recyconnectionList.size());
+        ngx_log_stderr(0,"当前时间队列大小(%d)。",m_timerQueuemap.size());        
+        ngx_log_stderr(0,"当前收消息队列/发消息队列大小分别为(%d/%d)，丢弃的待发送数据包数量为%d。",tmprmqc,tmpsmqc,m_iDiscardSendPkgCount);        
+        if( tmprmqc > 100000)
+        {
+            //接收队列过大，报一下，这个属于应该 引起警觉的，考虑限速等等手段
+            ngx_log_stderr(0,"接收队列条目数量过大(%d)，要考虑限速或者增加处理线程数量了！！！！！！",tmprmqc);
+        }
+        ngx_log_stderr(0,"-------------------------------------end---------------------------------------");
+    }
+    return;
 }

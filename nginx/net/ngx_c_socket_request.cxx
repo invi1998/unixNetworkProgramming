@@ -434,7 +434,7 @@ void CSocket::ngx_write_request_handler(lpngx_connection_t pConn)
             // 有这种情况发生？先do nothing
              ngx_log_stderr(errno,"CSocket::ngx_write_request_handler()中ngx_epoll_oper_event()失败。");
         }
-        ngx_log_stderr(0,"CSocket::ngx_write_request_handler()中数据发送完毕，很好。"); //做个提示吧，线上可以干掉
+        // ngx_log_stderr(0,"CSocket::ngx_write_request_handler()中数据发送完毕，很好。"); //做个提示吧，线上可以干掉
     }
     // 能走下来的，要么是数据发送完毕了，要么是对端断开了，开始执行收尾工作
 

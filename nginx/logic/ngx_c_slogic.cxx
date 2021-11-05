@@ -104,7 +104,7 @@ void CLogicSocket::threadRecvProcFunc(char *pMsgBuf)
         int calccrc = CCRC32::GetInstance()->Get_CRC((unsigned char *)pPkgBody, pkglen - m_iLenPkgHeader);  // 计算纯包体的crc值
         if (calccrc != pPkgHeader->crc32)   // 服务器端根据包体计算crc值，和客户端传递过来的包头中的crc32值做比较
         {
-            ngx_log_stderr(0,"CLogicSocket::threadRecvProcFunc()中CRC错误，丢弃数据!");    //正式代码中可以干掉这个信息
+            // ngx_log_stderr(0,"CLogicSocket::threadRecvProcFunc()中CRC错误，丢弃数据!");    //正式代码中可以干掉这个信息
 			return; //crc错，直接丢弃
         }
         
@@ -124,7 +124,7 @@ void CLogicSocket::threadRecvProcFunc(char *pMsgBuf)
     // （2）判断消息码是正确的，防止客户端恶意侵害服务器，发送一个不在服务器处理范围内的消息码
     if (imsgCode >= AUTH_TOTAL_COMMANDS)    // 无符号数不可能<0
     {
-        ngx_log_stderr(0,"CLogicSocket::threadRecvProcFunc()中imsgCode=%d消息码不对!",imsgCode); //这种有恶意倾向或者错误倾向的包，希望打印出来看看是谁干的
+        // ngx_log_stderr(0,"CLogicSocket::threadRecvProcFunc()中imsgCode=%d消息码不对!",imsgCode); //这种有恶意倾向或者错误倾向的包，希望打印出来看看是谁干的
         return; //丢弃不理这种包【恶意包或者错误包】
     }
     
@@ -132,7 +132,7 @@ void CLogicSocket::threadRecvProcFunc(char *pMsgBuf)
     // （3）有对应的消息处理函数
     if (statusHandler[imsgCode] == NULL)    // 这种利用imsgCode的方式可以使查找要执行的成员函数效率特别高
     {
-        ngx_log_stderr(0,"CLogicSocket::threadRecvProcFunc()中imsgCode=%d消息码找不到对应的处理函数!",imsgCode); //这种有恶意倾向或者错误倾向的包，希望打印出来看看是谁干的
+        // ngx_log_stderr(0,"CLogicSocket::threadRecvProcFunc()中imsgCode=%d消息码找不到对应的处理函数!",imsgCode); //这种有恶意倾向或者错误倾向的包，希望打印出来看看是谁干的
         return;  //没有相关的处理函数
     }
     
@@ -168,6 +168,9 @@ bool CLogicSocket::_HandleRegister(lpngx_connection_t pConn,LPSTRUC_MSG_HEADER p
 
     // （3）取得了整个发送过来的数据
     LPSTRUCT_REGISTER p_RecvInfo = (LPSTRUCT_REGISTER)pPkgBody;
+    p_RecvInfo->iType = ntohl(p_RecvInfo->iType);                       // 所有数值型，short,int,long,uint64_t,int64_t这种都不要忘记传输之前主机序转网络序，收到之后网络序转主机序
+    p_RecvInfo->password[sizeof(p_RecvInfo->password)-1]=0;             // 这非常关键，防止客户端发送过来畸形数据包，导致服务器直接使用这个数据导致错误
+    p_RecvInfo->username[sizeof(p_RecvInfo->username)-1]=0;             // 这非常关键，防止客户端发送过来畸形数据包，导致服务器直接使用这个数据导致错误
 
     // （4）这里可能要考虑根据业务逻辑，进一步判断收到数据的合法性
     // 当前该用户的状态是否适合收到这个数据等等【其实就是登陆验证】
@@ -234,7 +237,7 @@ bool CLogicSocket::_HandleRegister(lpngx_connection_t pConn,LPSTRUC_MSG_HEADER p
 
 bool CLogicSocket::_HandleLogIn(lpngx_connection_t pConn,LPSTRUC_MSG_HEADER pMsgHeader,char *pPkgBody,unsigned short iBodyLength)
 {
-    ngx_log_stderr(0,"执行了CLogicSocket::_HandleLogIn()!");
+    // ngx_log_stderr(0,"执行了CLogicSocket::_HandleLogIn()!");
     return true;
 }
 
@@ -255,7 +258,7 @@ void CLogicSocket::procPingTimeOutChecking(LPSTRUC_MSG_HEADER tmpmsg, time_t cur
         else if ((cur_time - p_Conn->lastPingTime) > (m_iWaitTime*3+10))
         {
             // 踢出 【如果此时此刻该用户正好断线，则这个socket可能立即被后续上来的连接复用，如果真的有人这么倒霉，赶上这个点了，那么可能就会错踢，错踢就错踢了吧，让他重新连接一次】
-            ngx_log_stderr(0,"时间到不发心跳包，踢出去!");   //感觉OK
+            // ngx_log_stderr(0,"时间到不发心跳包，踢出去!");   //感觉OK
             zdCloseSocketProc(p_Conn);
         }
 
@@ -304,7 +307,7 @@ bool CLogicSocket::_HandlePing(lpngx_connection_t pConn, LPSTRUC_MSG_HEADER pMsg
     // 服务器也发送一个只有包头的数据包给客户端，作为返回数据
     SendNoBodyPkgToClient(pMsgHeader, _CMD_PING);
 
-    ngx_log_stderr(0,"成功收到了心跳包并返回结果！");
+    // ngx_log_stderr(0,"成功收到了心跳包并返回结果！");
     return true;
     
 }

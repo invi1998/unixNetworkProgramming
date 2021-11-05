@@ -275,7 +275,7 @@ void CThreadPool::StopAll()
     
     m_threadVector.clear();
 
-    ngx_log_stderr(0,"CThreadPool::StopAll()成功返回，线程池中线程全部正常结束!");
+    // ngx_log_stderr(0,"CThreadPool::StopAll()成功返回，线程池中线程全部正常结束!");
     return; 
     
     
