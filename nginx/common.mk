@@ -3,8 +3,7 @@
 
 ifeq ($(DEBUG),true)
 #-g是生成调试信息。GNU调试器可以利用该信息
-# 同时为了使得编译器支持c++11新特性，需要在编译指令上添加-std=c++11
-CC = g++ -std=c++11 -g
+CC = g++ -std=c++11 -g 
 VERSION = debug
 else
 CC = g++ -std=c++11
@@ -69,7 +68,7 @@ $(BIN):$(LINK_OBJ)
 	@echo "------------------------build $(VERSION) mode--------------------------------!!!"
 
 #一些变量：$@：目标，     $^：所有目标依赖
-# gcc -o 是生成可执行文件 -lpthread 包含头文件了，仅能说明有了线程函数的声明， 但是还没有实现， 加上-lpthread是在链接阶段，链接这个库
+# gcc -o 是生成可执行文件
 	$(CC) -o $@ $^ -lpthread
 
 #----------------------------------------------------------------1end-------------------
@@ -100,7 +99,7 @@ $(DEP_DIR)/%.d:%.cxx
 	echo -n $(LINK_OBJ_DIR)/ > $@
 #	gcc -MM $^ | sed 's/^/$(LINK_OBJ_DIR)&/g' > $@
 #  >>表示追加
-# gcc -I$(INCLUDE_PATH) -MM $^ >> $@
+#	gcc -I$(INCLUDE_PATH) -MM $^ >> $@
 	$(CC) -I$(INCLUDE_PATH) -MM $^ >> $@
 
 #上行处理后，.d文件中内容应该就如：/mnt/hgfs/linux/nginx/app/link_obj/nginx.o: nginx.c ngx_func.h ../signal/ngx_signal.h

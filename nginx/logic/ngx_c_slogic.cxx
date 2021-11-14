@@ -20,7 +20,7 @@
 #include "ngx_global.h"
 #include "ngx_func.h"
 //#include "ngx_c_socket.h"
-#include "ngx_c_memory.h"
+#include "ngx_memory.h"
 #include "ngx_c_crc32.h"
 #include "ngx_c_slogic.h"  
 #include "ngx_logiccomm.h"
@@ -84,7 +84,7 @@ void CLogicSocket::threadRecvProcFunc(char *pMsgBuf)
     void    *pPkgBody = NULL;                                                           // 指向包体的指针
     unsigned short pkglen = ntohs(pPkgHeader->pkgLen);                                  // 客户端指明的包宽度【包头+包体】
 
-    if (m_iLenPkgHeader == pkg_len)
+    if (m_iLenPkgHeader == pkglen)
     {
         // 没有包头，只有包体
         if (pPkgHeader->crc32 != 0) // 只有包头的crc值给0
@@ -164,7 +164,7 @@ bool CLogicSocket::_HandleRegister(lpngx_connection_t pConn,LPSTRUC_MSG_HEADER p
     // （2）对于同一个用户，可能同时发送过来多个请求，造成多个线程同时为该用户服务，比如以网游为例，用户要在商店中买A物品，又买B物品，而用户的钱 只够买A或者B，不够同时买A和B呢？
     // 那如果用户发送购买命令过来买了一次A，又买了一次B，如果是两个线程来执行同一个用户的这两次不同的购买命令，很可能造成这个用户购买成功了 A，又购买成功了 B
     // 所以为了稳妥起见，针对某个用户的命令，我们一般都要进行互斥，需要增加临界的变量在ngx_connection_s结构中
-    Clock lock(&pConn->logicPorcMutex);         // 凡是和本用户有关的访问都要互斥
+    CLock lock(&pConn->logicPorcMutex);         // 凡是和本用户有关的访问都要互斥
 
     // （3）取得了整个发送过来的数据
     LPSTRUCT_REGISTER p_RecvInfo = (LPSTRUCT_REGISTER)pPkgBody;

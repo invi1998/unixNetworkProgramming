@@ -11,7 +11,7 @@
 #include "ngx_func.h"    //各种函数声明
 #include "ngx_c_conf.h"  //和配置文件处理相关的类,名字带c_表示和类有关
 #include "ngx_c_socket.h"  //和socket通讯相关
-#include "ngx_c_memory.h"  //和内存分配释放等相关
+#include "ngx_memory.h"  //和内存分配释放等相关
 #include "ngx_c_threadpool.h"  //和多线程有关
 #include "ngx_c_crc32.h"       //和crc32校验算法有关 
 #include "ngx_c_slogic.h"      //和socket通讯相关

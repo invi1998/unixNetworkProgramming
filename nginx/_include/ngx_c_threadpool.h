@@ -2,6 +2,7 @@
 #define __NGX_THREADPOOL_H__
 
 #include <vector>
+#include <list>
 #include <pthread.h>
 #include <atomic>   //c++11里的原子操作
 
@@ -15,7 +16,7 @@ public:
 public:
     bool Create(int threadNum);                 // 创建该线程池中所有的线程
     void StopAll();                             // 使线程池中所有的线程退出
-    void Call(int irmqc);                       // 来任务了，调一个线程池中的线程下来干活
+    void Call();                                // 来任务了，调一个线程池中的线程下来干活
     void inMsgRecvQueueAndSignal(char *buf);    // 收到一个完整消息后，入消息队列，并触发线程池中的线程来处理该消息
     int  getRecvMsgQueueCount() {return m_iRecvMsgQueueCount;}  // 获取接收消息队列大小
 

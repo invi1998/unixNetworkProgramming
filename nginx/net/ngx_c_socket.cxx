@@ -19,7 +19,7 @@
 #include "ngx_global.h"
 #include "ngx_func.h"
 #include "ngx_c_socket.h"
-#include "ngx_c_memory.h"
+#include "ngx_memory.h"
 #include "ngx_c_lockmutex.h"
 
 
@@ -100,7 +100,7 @@ bool CSocket::Initialize_subproc()
     }
 
     // 连接相关互斥量初始化
-    if (pthread_mutex_init(&m_connctionMutex, NULL) != 0)
+    if (pthread_mutex_init(&m_connectionMutex, NULL) != 0)
     {
         ngx_log_stderr(0,"CSocket::Initialize_subproc()中pthread_mutex_init(&m_connectionMutex)失败.");
         return false; 
@@ -216,7 +216,7 @@ void CSocket::clearMsgSendQueue()
     {
         sTmpMempoint = m_MsgSendQueue.front();
         m_MsgSendQueue.pop_front();
-        p_memeory->FreeMemory(sTmpMempoint);
+        p_memory->FreeMemory(sTmpMempoint);
     }
     
 }
@@ -375,7 +375,7 @@ bool CSocket::setnonblocking(int sockfd)
 }
 
 // 关闭socket，什么时候用，这里暂时不确定，先把这个函数预备在这里
-void CSocket::ngx_close_listening_sockts()
+void CSocket::ngx_close_listening_sockets()
 {
     for(int i = 0; i < m_ListenPortCount; i++)  // 要关闭这些个监听端口
     {
@@ -405,7 +405,7 @@ void CSocket::msgSend(char *psendbuf)
     // 总体数据并无风险，不会导致服务器奔溃，要看个体数据，找一下恶意者
     LPSTRUC_MSG_HEADER pMsgHeader = (LPSTRUC_MSG_HEADER)psendbuf;
     lpngx_connection_t p_Conn = pMsgHeader->pConn;
-    if (pConn->iSendCount > 400)
+    if (p_Conn->iSendCount > 400)
     {
         // 该用户收消息太慢【或者干脆不收消息】。积累的该用户的发送队列中的数据条目数过大，认为是恶意用户，直接切断
         ngx_log_stderr(0,"CSocket::msgSend()中发现某用户%d积压了大量待发送数据包，切断与他的连接！",p_Conn->fd); 
@@ -609,7 +609,7 @@ int CSocket::ngx_epoll_oper_event(int fd, uint32_t eventtype, uint32_t flag, int
     struct epoll_event ev;
     memset(&ev, 0, sizeof(ev));
 
-    if (eventype == EPOLL_CTL_ADD)  // 往红黑树中加节点
+    if (eventtype == EPOLL_CTL_ADD)  // 往红黑树中加节点
     {
         // 红黑树中从无到有增加节点
         // ev.data.ptr = (void*)pConn;
@@ -692,12 +692,12 @@ int CSocket::ngx_epoll_process_events(int timer)
     // ngx_log_stderr(errno,"惊群测试1:%d",events); 
 
     // 走到这里，就属于有事件收到了
-    lpngx_connection_t      c;
+    lpngx_connection_t      p_Conn;
     // uintptr_t               instance;
     uint32_t                revents;
     for(int i = 0; i < events; ++i)     // 遍历本次epoll_wait返回的所有事件，注意，events才是返回的实际事件数量
     {
-        c = (lpngx_connection_t)(m_events[i].data.ptr);         // ngx_epoll_add_event()给进去的，这里就能取出来
+        p_Conn = (lpngx_connection_t)(m_events[i].data.ptr);         // ngx_epoll_add_event()给进去的，这里就能取出来
 
         // instance = (uintptr_t)c & 1;                            // 将地址的最后一位取出来，用instance变量进行标识，见：ngx_epoll_add_event函数。该值当时是随着连接池中的连接一起给传进来的
         // c = (lpngx_connection_t)((uintptr_t) c & (uintptr_t) ~1);   // 最后一位去掉，得到真正的c地址
@@ -753,7 +753,7 @@ int CSocket::ngx_epoll_process_events(int timer)
             // 一个客户端新连入，这个就会成立
             // 已连接发送数据来，这个也成立
             // c->r_ready = 1;              // 标记可读。【从连接池中拿出一个连接时，这个连接的所有成员都是0】
-            (this->*(c->rhandler))(c);      // 注意括号的运用，来正确的设置优先级，防止编译出错；如果是个新客户连入
+            (this->*(p_Conn->rhandler))(p_Conn);      // 注意括号的运用，来正确的设置优先级，防止编译出错；如果是个新客户连入
                                             // 如果新连接进入，这里执行的应该是CSocket::ngx_event_accept(c)
                                             // 如果是已经连入，发送数据到这里，则这里执行的应该是CSocket::ngx_read_request_handler
             // 为什么可以这样掉用呢？看该函数指针定义方法（他是一个成员函数指针）
@@ -803,7 +803,7 @@ void* CSocket::ServerSendQueueThread(void* threadData)
     unsigned short      itmp;
     ssize_t             sendsize;
 
-    CMemeory *p_memory = CMemory::GetInstance();
+    CMemory *p_memory = CMemory::GetInstance();
 
     while (g_stopEvent == 0)        // 不退出
     {
@@ -889,7 +889,7 @@ void* CSocket::ServerSendQueueThread(void* threadData)
                 if (sendsize > 0)
                 {
                     // 成功发送出去了数据，一下就发出去这样很顺利
-                    if (sendsize == p_Conn->isendLen)
+                    if (sendsize == p_Conn->isendlen)
                     {
                         // 成功发送的和要求发送的数据相等，说明全部发送成功 发送缓冲区 【数据全部发送完毕】
                         p_memory->FreeMemory(p_Conn->psendMemPointer);      // 释放内存
@@ -914,7 +914,7 @@ void* CSocket::ServerSendQueueThread(void* threadData)
                                                             ) == -1)
                         {
                             //有这情况发生？这可比较麻烦，不过先do nothing
-                            ngx_log_stderr(errno,"CSocket::ServerSendQueueThread()中ngx_epoll_add_event()失败.");
+                            ngx_log_stderr(errno,"CSocket::ServerSendQueueThread()中ngx_epoll_oper_event失败.");
                         }
                         // ngx_log_stderr(errno,"CSocket::ServerSendQueueThread()中数据没发送完毕【发送缓冲区满】，整个要发送%d，实际发送了%d。",p_Conn->isendlen,sendsize);
                     }
@@ -943,13 +943,13 @@ void* CSocket::ServerSendQueueThread(void* threadData)
                     ++p_Conn->iThrowsendCount;      // 标记发送缓冲区已经满了，需要通过epoll事件来驱动消息的继续发送
                     if (pSocketObj->ngx_epoll_oper_event(p_Conn->fd,        // socket句柄
                                                         EPOLL_CTL_MOD,      // 事件类型，这里是增加【因为我准备增加个写通知】
-                                                        EPOLLOUT            // 标志，这里代表要增加的标志，EPOLLOUT：可写【可写的时候通知我】                                                   
+                                                        EPOLLOUT,           // 标志，这里代表要增加的标志，EPOLLOUT：可写【可写的时候通知我】                                                   
                                                         0,                  // 对于事件类型为增加的，EPOLL_CTL_MOD需要这个参数 0：增加， 1：去除， 2：完全覆盖
                                                         p_Conn              // 连接池中的连接
                                                         ) == -1)
                     {
                         //有这情况发生？这可比较麻烦，不过先do nothing
-                        ngx_log_stderr(errno,"CSocket::ServerSendQueueThread()中ngx_epoll_add_event()_2失败.");
+                        ngx_log_stderr(errno,"CSocket::ServerSendQueueThread()中ngx_epoll_oper_event()失败.");
                     }
                     continue;
                 }
@@ -1021,7 +1021,7 @@ bool CSocket::TestFlood(lpngx_connection_t pConn)
         reco = true;
     }
     
-     return reco
+     return reco;
 }
 
 // 打印统计信息

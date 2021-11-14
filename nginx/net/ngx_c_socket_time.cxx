@@ -18,7 +18,7 @@
 #include "ngx_global.h"
 #include "ngx_func.h"
 #include "ngx_c_socket.h"
-#include "ngx_c_memory.h"
+#include "ngx_memory.h"
 #include "ngx_c_lockmutex.h"
 
 // 设置踢出时钟（向multimap表中增加内容），用户三次握手成功连入，然后程序开启超时踢人开关【Sock_WaitTimeEnable = 1】那么本函数被调用
@@ -66,7 +66,7 @@ LPSTRUC_MSG_HEADER CSocket::RemoveFirstTimer()
 
 // 根据给的当前时间，从m_timeQueuemap中找到比这个时间更老（更早）的节点【1个】返回去，这些节点都是时间超过了，要处理的节点
 // 掉用者负责互斥，所以本函数不用互斥
-LPSTRUC_MSG_HEADER CSocket::GetOverTimeTimer(time_t time)
+LPSTRUC_MSG_HEADER CSocket::GetOverTimeTimer(time_t cur_time)
 {
     CMemory *p_memory = CMemory::GetInstance();
     LPSTRUC_MSG_HEADER ptmp;

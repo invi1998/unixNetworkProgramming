@@ -21,7 +21,7 @@
 #include "ngx_global.h"
 #include "ngx_func.h"
 #include "ngx_c_socket.h"
-#include "ngx_c_memory.h"
+#include "ngx_memory.h"
 #include "ngx_c_lockmutex.h"  //自动释放互斥量的一个类
 
 //来数据时候的处理，当连接上有数据来的时候，本函数会被ngx_epoll_process_events()所调用  ,官方的类似函数为ngx_http_wait_request_handler();
@@ -229,7 +229,7 @@ void CSocket::ngx_wait_request_handler_proc_p1(lpngx_connection_t pConn, bool &i
         pConn->irecvlen = m_iLenPkgHeader;
 
     }
-    else if (e_pkgLen > (_PKG_MAX_LENGTH-1000)) // 客户端发送来的包居然说包长度 > 29000 ? 判定为恶意包
+    else if (e_pkgLen > (__PKG_MAX_LENGTH__-1000)) // 客户端发送来的包居然说包长度 > 29000 ? 判定为恶意包
     {
         // 恶意包，太大，认定为非法用户，废包【包头中说这个包总长度这么大，这不行】
         // 状态和接收位置都复原，这些值都有必要，因为有可能在其他状态比如_PKG_HD_RECVING状态调用这函数
@@ -242,8 +242,7 @@ void CSocket::ngx_wait_request_handler_proc_p1(lpngx_connection_t pConn, bool &i
         // 合法的包头，继续处理
         // 现在要分配内存，开始接收包体，因为包体总长度并不是固定的，所以内存肯定要new出来
         char *pTmpBuffer = (char *)p_memory->AllocMemory(m_iLenMsgHeader + e_pkgLen, false);    // 分配内存【长度是 消息头长度 + 包体长度】最后参数先给false，表示内存不需要memset
-        pConn->ifnewrecvMem = true;         // 标记我们new了内存，将来在ngx_free_connextion()要进行内存回收
-        pConn->pnewMemPointer = pTmpBuffer;     // 内存开始指针
+        pConn->precvMemPointer = pTmpBuffer;     // 内存开始指针
 
 
         // 1）先填写消息头内容
@@ -287,7 +286,7 @@ void CSocket::ngx_wait_request_handler_proc_plast(lpngx_connection_t pConn, bool
 {
     // 把这段内存放到消息队列中来
     // int irmqc = 0;    // 消息队列中当前消息数量
-    // inMsgRecvQueue(pConn->pnewMemPointer, irmqc);
+    // inMsgRecvQueue(pConn->precvMemPointer, irmqc);
     // 注意这里，我们把这段new出来的内存放到消息队列中，那么后续这段内存就不归连接池管理了
     // 也就是说，这段内存的释放就不能再连接池中进行释放了，而应该放到具体的业务函数中进行处理
     // 所以下面才会把ifnewrecvMem内存释放标记设置为false，指向内存的指针也设置为空NULL
@@ -308,10 +307,10 @@ void CSocket::ngx_wait_request_handler_proc_plast(lpngx_connection_t pConn, bool
     }
     
 
-    // g_threadpool.inMsgRecvQueueAndSignal(pConn->pnewMemPointer);    // 入消息队列并触发线程处理消息
+    // g_threadpool.inMsgRecvQueueAndSignal(pConn->precvMemPointer);    // 入消息队列并触发线程处理消息
 
-    pConn->ifnewrecvMem     = false;            // 内存不再需要释放，因为你收完整了包，这个包被上面调用inMsgRecvQueue()移入消息队列，那么释放内存就属于业务逻辑去干， 不需要回收连接到连接池中做了
-    pConn->pnewMemPointer   = NULL;
+    // pConn->ifnewrecvMem     = false;            // 内存不再需要释放，因为你收完整了包，这个包被上面调用inMsgRecvQueue()移入消息队列，那么释放内存就属于业务逻辑去干， 不需要回收连接到连接池中做了
+    pConn->precvMemPointer   = NULL;
     pConn->curStat          = _PKG_HD_INIT;     // 收包状态机的状态恢复为原始态，为收下一个包做准备
     pConn->precvbuf         = pConn->dataHeadInfo;  // 设置好收包的位置
     pConn->irecvlen         = m_iLenPkgHeader;  // 设置好要接收的数据的大小

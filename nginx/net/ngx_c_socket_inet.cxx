@@ -46,7 +46,7 @@ size_t CSocket::ngx_sock_ntop(struct sockaddr *sa, int port, u_char *text, size_
             p = ngx_snprintf(text, len, "%ud.%ud.%ud.%ud",p[0], p[1], p[2], p[3]);
         }
 
-        return (p->text);
+        return (p - text);
         break;
     
     default:

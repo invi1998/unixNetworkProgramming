@@ -90,7 +90,7 @@ struct ngx_connection_s
     // ------------------------------------------------------------------------------------------
     lpngx_connection_t          next;                               // 这个指针，指向下一个本类型对象，用于把空闲的连接池对象串起来构成一个单向链表，方便取用
 
-}
+};
 
 
 //消息头，引入的目的是当收到数据包时，额外记录一些内容以备将来使用
@@ -152,8 +152,8 @@ class CSocket
                                                                                         // 因为这里涉及到好几个要释放的资源，所以写成函数
 
         ssize_t recvproc(lpngx_connection_t pConn, char *buff, ssize_t buflen);         // 接收从客户端来的数据专用函数
-        void ngx_wait_request_handler_proc_p1(lpngx_connection_t pConn, &isflood);      // 包头接收完整后的处理函数，这里称之为包处理阶段1，写成函数方便复用
-        void ngx_wait_request_handler_proc_plast(lpngx_connection_t pConn, &isflood);   // 收到一个完整的包后的处理函数                                                    
+        void ngx_wait_request_handler_proc_p1(lpngx_connection_t pConn, bool &isflood);      // 包头接收完整后的处理函数，这里称之为包处理阶段1，写成函数方便复用
+        void ngx_wait_request_handler_proc_plast(lpngx_connection_t pConn, bool &isflood);   // 收到一个完整的包后的处理函数                                                    
         void clearMsgSendQueue();                                                       // 清理消息队列
 
         ssize_t sendproc(lpngx_connection_t pConn, char *buff, ssize_t size);           // 将数据发送到客户端
@@ -222,7 +222,7 @@ class CSocket
         pthread_mutex_t                 m_connectionMutex;                  // 连接相关互斥量，互斥m_freeconnectionList, m_connectionList
         pthread_mutex_t                 m_recyconnqueueMutex;               // 连接回收队列相关的互斥量
         std::list<lpngx_connection_t>   m_recyconnectionList;               // 将要释放的连接放在这里
-        std::atomic<list>               m_total_recyconnection_n;           // 待释放的连接队列大小
+        std::atomic<int>               m_total_recyconnection_n;           // 待释放的连接队列大小
         int                             m_RecyConnectionWaitTime;           // 等待这么些秒后才回收连接
 
         // lpngx_connection_t              m_pconnections;                     // 注意这里是一个指针，其实这里是个连接池的首地址

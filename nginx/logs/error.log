@@ -16,3 +16,15 @@
 2021/10/17 03:22:27 [notice] 15073: signal 1 (SIGHUP) received from 5742
 2021/10/17 03:23:11 [notice] 15071: signal 17 (SIGCHLD) received from 15075
 2021/10/17 03:23:11 [alert] 15071: pid = 15075 exited on signal 9!
+2021/11/14 00:50:40 [info] 8666: 监听80端口成功！
+2021/11/14 00:50:40 [notice] 8667: master process ./nginx 8667 启动并开始运行......!
+2021/11/14 00:50:41 [notice] 8673: worker process 8673 启动并开始运行......!
+2021/11/14 00:50:41 [notice] 8668: worker process 8668 启动并开始运行......!
+2021/11/14 00:50:41 [notice] 8669: worker process 8669 启动并开始运行......!
+2021/11/14 00:50:41 [notice] 8671: worker process 8671 启动并开始运行......!
+2021/11/14 01:02:35 [info] 9578: 监听80端口成功！
+2021/11/14 01:02:35 [notice] 9579: master process ./nginx 9579 启动并开始运行......!
+2021/11/14 01:02:36 [notice] 9588: worker process 9588 启动并开始运行......!
+2021/11/14 01:02:36 [notice] 9583: worker process 9583 启动并开始运行......!
+2021/11/14 01:02:36 [notice] 9581: worker process 9581 启动并开始运行......!
+2021/11/14 01:02:36 [notice] 9580: worker process 9580 启动并开始运行......!

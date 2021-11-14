@@ -6,7 +6,7 @@
 #include "ngx_global.h"
 #include "ngx_func.h"
 #include "ngx_c_threadpool.h"
-#include "ngx_c_memory.h"
+#include "ngx_memory.h"
 #include "ngx_macro.h"
 
 // 静态成员初始化
@@ -119,15 +119,15 @@ void * CThreadPool::ThreadFunc(void * threadData)
     CThreadPool *pThreadPoolObj = pThread->_pThis;
     // pThreadPoolObj这个就是该线程池类对象的指针
 
-    char *jobbuf = NULL;
+    // char *jobbuf = NULL;
     CMemory *p_memory = CMemory::GetInstance();
     int err;
 
-    pThread_t tid = pThread_self();     // 获取线程自身ID，以方便调试打印
+    pthread_t tid = pthread_self();     // 获取线程自身ID，以方便调试打印
     while (true)
     {
         // 线程用pthread_mutex_lock()函数去锁定指定的mutex变量，若该mutex已经被另一个线程锁定了，该调用将会阻塞线程直到mutex被解锁
-        err = pThread_mutex_lock(&m_pthreadMutex);
+        err = pthread_mutex_lock(&m_pthreadMutex);
         if (err!=0)
         {
             // 有问题，及时打印
@@ -144,7 +144,7 @@ void * CThreadPool::ThreadFunc(void * threadData)
         {
             // 如果这个pthread_cond_wait被唤醒【被唤醒后程序执行流程往下走的前提是拿到了锁--官方：pthread_cond_wait()返回时，互斥量再次被锁住】
             // 那么会立即再次执行g_socket.outMsgRecvQueue()。如果拿到了一个NULL，则继续在这里wait()着
-            if (pthread->ifrunning == false)
+            if (pThread->ifrunning == false)
             {
                 pThread->ifrunning = true;  // 标记为true了才允许调用StopAll(): 测试中如果发现Create()和StopAll()紧挨着调用，就会导致线程混乱，所以每个线程必须执行到这里，才认为是启动了
             }
@@ -282,7 +282,7 @@ void CThreadPool::StopAll()
 }
 
 // 来任务了，调用一个线程池中的线程来干活
-void CThreadPool::Call(int irmqc)
+void CThreadPool::Call()
 {
     //ngx_log_stderr(0,"m_pthreadCondbegin--------------=%ui!",m_pthreadCond);  //数字5，此数字不靠谱
     //for(int i = 0; i <= 100; i++)
@@ -369,7 +369,7 @@ void CThreadPool::inMsgRecvQueueAndSignal(char *buf)
     ++m_iRecvMsgQueueCount;                 // 收消息队列数字+1，个人认为使用功能变量更方便一点，比m_MsgRecvQueue.size()高效
 
     // 取消互斥
-    err = pthread_mutex_unlock();
+    err = pthread_mutex_unlock(&m_pthreadMutex);
     if (err!=0)
     {
         ngx_log_stderr(err,"CThreadPool::inMsgRecvQueueAndSignal()pthread_mutex_unlock()失败，返回的错误码为%d!",err);

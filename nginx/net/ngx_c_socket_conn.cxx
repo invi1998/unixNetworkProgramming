@@ -19,7 +19,7 @@
 #include "ngx_global.h"
 #include "ngx_func.h"
 #include "ngx_c_socket.h"
-#include "ngx_c_memory.h"
+#include "ngx_memory.h"
 #include "ngx_c_lockmutex.h"
 
 
@@ -103,7 +103,7 @@ void CSocket::initconnection()
 void CSocket::clearconnection()
 {
     lpngx_connection_t p_Conn;
-    CMemory *p_memory = CMemory.GetInstance();
+    CMemory *p_memory = CMemory::GetInstance();
 
     while (!m_connectionList.empty())
     {
@@ -170,7 +170,7 @@ lpngx_connection_t CSocket::ngx_get_connection(int isock)
     // c->irecvlen = sizeof(COMM_PKG_HEADER);               //这里指定收数据的长度，这里先要求收包头这么长字节的数据
 
     // c->ifnewrecvMem = false;                             //标记我们并没有new内存，所以不用释放	 
-    // c->pnewMemPointer = NULL;                            //既然没new内存，那自然指向的内存地址先给NULL
+    // c->precvMemPointer = NULL;                            //既然没new内存，那自然指向的内存地址先给NULL
 
     // // 3）这个值有用，所以在上面 (1)中被保留，没有被清空，这里又把这个值赋回来
     // c->instance = !instance;                            // 官方nginx写法，【分配内存的时候，连接池中每个对象这个变量给的值都为1，所以这里取反应该是0，【有效】】
@@ -187,7 +187,7 @@ void CSocket::ngx_free_connection(lpngx_connection_t p_Conn)
 {
 
     // 因为有线程可能要动连接池中的连接，所以在这里互斥也是有必要的
-    CLock lock(&m_ConnectionMutex);
+    CLock lock(&m_connectionMutex);
 
     // 首先先明确一点，连接，所有连接全部都在m_connectionList里面
     p_Conn->PutOneToFree();
@@ -203,8 +203,8 @@ void CSocket::ngx_free_connection(lpngx_connection_t p_Conn)
     // if (c->ifnewrecvMem == true)
     // {
     //     // 我们曾经给这个连接分配过内存，则要释放内存
-    //     CMemory::GetInstance()->FreeMemory(c->pnewMemPointer);
-    //     c->pnewMemPointer = NULL;
+    //     CMemory::GetInstance()->FreeMemory(c->precvMemPointer);
+    //     c->precvMemPointer = NULL;
     //     c->ifnewrecvMem = false;
     // }
     
@@ -281,7 +281,7 @@ void *CSocket::ServerRecyConnectionThread(void * threadData)
 
 lblRRTD:
             pos     = pSocketObj->m_recyconnectionList.begin();
-            posend  = pSocketObj->m_recyconnectionList.end()
+            posend  = pSocketObj->m_recyconnectionList.end();
             for (; pos != posend; ++pos)
             {
                 p_Conn = (*pos);
@@ -316,7 +316,7 @@ lblRRTD:
                 
             }
             
-            err = pThread_mutex_unlock(&pSocketObj->m_recyconnqueueMutex);
+            err = pthread_mutex_unlock(&pSocketObj->m_recyconnqueueMutex);
             if (err != 0)
             {
                 ngx_log_stderr(err,"CSocket::ServerRecyConnectionThread()pthread_mutex_unlock()失败，返回的错误码为%d!",err);

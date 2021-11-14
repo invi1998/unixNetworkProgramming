@@ -328,3 +328,17 @@ static u_char * ngx_sprintf_num(u_char *buf, u_char *last, uint64_t ui64, u_char
     return ngx_cpymem(buf, p, len); //把最新buf返回去；
 }
 
+//----------------------------------------------------------------------------------------------------------------------
+//和上边的ngx_snprintf非常类似
+u_char * ngx_snprintf(u_char *buf, size_t max, const char *fmt, ...)   //类printf()格式化函数，比较安全，max指明了缓冲区结束位置
+{
+    u_char   *p;
+    va_list   args;
+
+    va_start(args, fmt);
+    p = ngx_vslprintf(buf, buf + max, fmt, args);
+    va_end(args);
+    return p;
+}
+
+

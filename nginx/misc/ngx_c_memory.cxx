@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "ngx_c_memory.h"
+#include "ngx_memory.h"
 
 // 类静态成员赋值
 CMemory *CMemory::m_instance = NULL;
