@@ -8,7 +8,7 @@
 
 int main(int argc, char *const *argv)
 {             
-    printf("非常高兴，大家和老师一起学习《linux c++通讯架构实战》\n");    
+    printf("非常高兴，一起学习《linux c++通讯架构实战》\n");    
     myconf();
     mysignal();
     
