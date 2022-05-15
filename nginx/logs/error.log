@@ -28,3 +28,7 @@
 2021/11/14 01:02:36 [notice] 9583: worker process 9583 启动并开始运行......!
 2021/11/14 01:02:36 [notice] 9581: worker process 9581 启动并开始运行......!
 2021/11/14 01:02:36 [notice] 9580: worker process 9580 启动并开始运行......!
+2022/05/10 06:57:58 [stderr] 1689: nginx: CSocket::Initialize()中bind()失败,i=0. (13: Permission denied) 
+ (13: Permission denied) 
+2022/05/10 06:57:58 [stderr] 1689: nginx: 程序退出，再见了!
+
